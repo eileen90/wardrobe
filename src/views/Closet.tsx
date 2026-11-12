@@ -100,11 +100,13 @@ const place = (b: Box, s = 1) =>
 
 export interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
 
-export function Closet({ onOpen, onAdd, hidden }: {
+export function Closet({ onOpen, onAdd, onConnect, hidden }: {
   onOpen: (id: string, from: DOMRect) => void;
   onAdd: () => void;
+  onConnect: () => void;
   hidden: boolean;
 }) {
+  const hasKey = useStore((s) => !!s.settings.key);
   const items = useStore((s) => s.items);
   const mode = useStore((s) => s.settings.closetView);
   const { w: vw, h: vh } = useViewport();
@@ -194,6 +196,7 @@ export function Closet({ onOpen, onAdd, hidden }: {
           <Mark className="mark" />
           <p>Nothing on the floor yet. Photograph a piece and the studio lays it out clean.</p>
           <button className="go" onClick={onAdd}><Icon name="plus" />Add your first piece</button>
+          {!hasKey && <button className="pill is-quiet" onClick={onConnect}>connect the studio first</button>}
         </div>
       </div>
     );

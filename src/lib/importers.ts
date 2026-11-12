@@ -1,11 +1,6 @@
 /** Getting pictures in from the web: a pasted image, an image link, or a shop page. */
 
 const IMG_PROXY = (u: string) => `https://wsrv.nl/?url=${encodeURIComponent(u)}&n=-1&output=png`;
-const PAGE_PROXIES = [
-  (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-];
-
 async function getImage(url: string): Promise<Blob | null> {
   // Straight from the site first (works when it allows other sites to read it),
   // then through an image relay that does.
@@ -22,44 +17,40 @@ async function getImage(url: string): Promise<Blob | null> {
   return null;
 }
 
-/** The main product picture a shop page advertises. */
-function pictureFromPage(html: string, base: string): string | null {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const meta = (sel: string) => doc.querySelector(sel)?.getAttribute('content');
-  let found =
-    meta('meta[property="og:image:secure_url"]') ??
-    meta('meta[property="og:image"]') ??
-    meta('meta[name="twitter:image"]') ??
-    meta('meta[name="twitter:image:src"]');
-  if (!found) {
-    for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
-      try {
-        const walk = (o: unknown): string | null => {
-          if (!o || typeof o !== 'object') return null;
-          const img = (o as Record<string, unknown>).image;
-          if (typeof img === 'string') return img;
-          if (Array.isArray(img) && typeof img[0] === 'string') return img[0];
-          if (img && typeof img === 'object' && typeof (img as Record<string, unknown>).url === 'string')
-            return (img as Record<string, string>).url;
-          for (const v of Object.values(o)) {
-            const r = walk(v);
-            if (r) return r;
-          }
-          return null;
-        };
-        found = walk(JSON.parse(s.textContent ?? ''));
-        if (found) break;
-      } catch {
-        /* not valid JSON */
-      }
-    }
-  }
-  if (!found) return null;
+/**
+ * Ask a link-preview service for a page's main picture and title.
+ * Shops don't let other sites read their pages directly, so this has to go through a relay.
+ */
+async function pictureFromPage(page: string): Promise<{ pic: string; title?: string } | null> {
   try {
-    return new URL(found, base).href;
+    const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(page)}`);
+    if (r.ok) {
+      const d = (await r.json())?.data;
+      if (d?.image?.url) return { pic: d.image.url, title: d.title };
+    }
   } catch {
-    return null;
+    /* try the next one */
   }
+  try {
+    const r = await fetch(`https://r.jina.ai/${page}`, {
+      headers: { Accept: 'application/json', 'X-With-Images-Summary': 'true' },
+    });
+    if (r.ok) {
+      const d = (await r.json())?.data;
+      const pic = d?.metadata?.['og:image'] ?? Object.values(d?.images ?? {})[0];
+      if (typeof pic === 'string') return { pic, title: d?.title };
+    }
+  } catch {
+    /* nothing more to try */
+  }
+  return null;
+}
+
+/** "Linen Shirt | Some Shop" → "Linen Shirt": keep the longest part of a page title. */
+function productName(title?: string) {
+  if (!title) return undefined;
+  const parts = title.split(/\s[|\u2013\u2014-]\s/).map((p) => p.trim()).filter(Boolean);
+  return parts.sort((a, b) => b.length - a.length)[0]?.slice(0, 60);
 }
 
 export interface Imported { blob: Blob; url: string; name?: string }
@@ -76,24 +67,11 @@ export async function fromLink(input: string): Promise<Imported> {
     const b = await getImage(url.href);
     if (b) return { blob: b, url: url.href };
   }
-  // A page: read it through a relay and look for its product picture.
-  for (const p of PAGE_PROXIES) {
-    try {
-      const r = await fetch(p(url.href));
-      if (!r.ok) continue;
-      const type = r.headers.get('content-type') ?? '';
-      if (type.startsWith('image/')) return { blob: await r.blob(), url: url.href };
-      const html = await r.text();
-      const pic = pictureFromPage(html, url.href);
-      if (!pic) continue;
-      const b = await getImage(pic);
-      if (!b) continue;
-      const title = new DOMParser().parseFromString(html, 'text/html')
-        .querySelector('meta[property="og:title"]')?.getAttribute('content') ?? undefined;
-      return { blob: b, url: url.href, name: title?.slice(0, 60) };
-    } catch {
-      /* try the next relay */
-    }
+  // A shop page: find its product picture.
+  const found = await pictureFromPage(url.href);
+  if (found) {
+    const b = await getImage(found.pic);
+    if (b) return { blob: b, url: url.href, name: productName(found.title) };
   }
   // Last try: maybe it was an image after all.
   const b = await getImage(url.href);

@@ -5,22 +5,23 @@ import { Garment, Icon, Mark, toast } from '../ui';
 
 /** The rails you can swipe, top to bottom. Tops and dresses share one rail. */
 const RAILS = [
-  { id: 'outer', label: 'jacket', cats: ['outer'] as Category[], weight: 1 },
-  { id: 'top', label: 'top', cats: ['top', 'dress'] as Category[], weight: 1 },
-  { id: 'bottom', label: 'bottom', cats: ['bottom'] as Category[], weight: 1.12 },
-  { id: 'shoes', label: 'shoes', cats: ['shoes'] as Category[], weight: 0.52 },
-  { id: 'bag', label: 'bag', cats: ['bag', 'extra'] as Category[], weight: 0.52 },
+  { id: 'outer', label: 'jacket', cats: ['outer'] as Category[], weight: 1, width: 78 },
+  { id: 'top', label: 'top', cats: ['top', 'dress'] as Category[], weight: 1, width: 78 },
+  { id: 'bottom', label: 'bottom', cats: ['bottom'] as Category[], weight: 1.12, width: 78 },
+  { id: 'shoes', label: 'shoes', cats: ['shoes'] as Category[], weight: 0.46, width: 52 },
+  { id: 'bag', label: 'bag', cats: ['bag', 'extra'] as Category[], weight: 0.46, width: 44 },
 ] as const;
 type RailId = (typeof RAILS)[number]['id'];
 
 interface Moving { key: number; item: Item; role: 'in' | 'out'; sgn: number; from: number; delay: number }
 
 /** One rail: the current piece plus whatever is still sliding in or out. */
-function Rail({ pool, index, top, height, label, onStep, registerSlide }: {
+function Rail({ pool, index, top, height, width, label, onStep, registerSlide }: {
   pool: Item[];
   index: number;
   top: number;
   height: number;
+  width: number;
   label: string;
   onStep: (delta: number, from: number) => void;
   registerSlide: (fn: (to: Item, exitSign: number, from: number, delay: number) => void) => void;
@@ -127,7 +128,7 @@ function Rail({ pool, index, top, height, label, onStep, registerSlide }: {
           onPointerMove={l.role === 'in' ? move : undefined}
           onPointerUp={l.role === 'in' ? up : undefined}
           onPointerCancel={l.role === 'in' ? up : undefined}
-          style={{ touchAction: 'pan-y' }}
+          style={{ touchAction: 'pan-y', width: `${width}%`, marginLeft: `${-width / 2}%` }}
         >
           <Garment item={l.item} size="full" />
           {l.item.status === 'wish' && <span className="tag">wishlist</span>}
@@ -286,6 +287,7 @@ export function Mix({ startWith, onSaved, onAdd }: {
             <Rail
               key={r.id}
               label={r.label}
+              width={r.width}
               pool={pools[r.id]}
               index={clamp(r.id)}
               top={top - over}
@@ -297,10 +299,10 @@ export function Mix({ startWith, onSaved, onAdd }: {
         })}
         {visible.length > 0 && (
           <>
-            <button className="arrow is-prev" style={{ left: 0 }} aria-label="Previous outfit" onClick={() => all((_r, _n, c) => c - 1, -1)}>
+            <button className="arrow is-prev" aria-label="Previous outfit" onClick={() => all((_r, _n, c) => c - 1, -1)}>
               <Icon name="prev" box="0 0 24 34" />
             </button>
-            <button className="arrow is-next" style={{ right: 26 }} aria-label="Next outfit" onClick={() => all((_r, _n, c) => c + 1, 1)}>
+            <button className="arrow is-next" aria-label="Next outfit" onClick={() => all((_r, _n, c) => c + 1, 1)}>
               <Icon name="next" box="0 0 24 34" />
             </button>
           </>

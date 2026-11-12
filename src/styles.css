@@ -1018,10 +1018,10 @@ textarea.input {
 .row__count {
   position: absolute;
   z-index: 3;
-  right: 14px;
-  top: 50%;
+  right: 12px;
+  top: 14%;
   writing-mode: vertical-rl;
-  transform: translateY(-50%) rotate(180deg);
+  transform: rotate(180deg);
   font-size: 11px;
   letter-spacing: 0.02em;
   color: var(--muted);
@@ -1070,10 +1070,10 @@ textarea.input {
   transform: scale(0.82);
 }
 .arrow.is-prev {
-  left: 22px;
+  left: 0;
 }
 .arrow.is-next {
-  right: 22px;
+  right: 0;
 }
 
 /* ---------- looks ---------- */

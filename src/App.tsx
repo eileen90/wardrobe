@@ -43,7 +43,7 @@ export function App() {
         ))}
       </nav>
 
-      <Closet hidden={tab !== 'closet'} onAdd={() => setAdding(true)} onOpen={(id, from) => setFocus({ id, from })} />
+      <Closet hidden={tab !== 'closet'} onAdd={() => setAdding(true)} onConnect={() => setTab('studio')} onOpen={(id, from) => setFocus({ id, from })} />
       {tab === 'mix' && <Mix startWith={mixWith} onSaved={(id) => { setTab('looks'); setBoard(id); }} onAdd={() => setAdding(true)} />}
       {tab === 'looks' && <Looks onOpen={setBoard} />}
       <Studio hidden={tab !== 'studio'} />
