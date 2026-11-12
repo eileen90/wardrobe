@@ -12,11 +12,11 @@ export default defineConfig({
       manifest: {
         name: 'Wardrobe',
         short_name: 'Wardrobe',
-        description: 'My closet, my outfits.',
+        description: 'Everything I own, laid out.',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#F2EEE6',
-        theme_color: '#F2EEE6',
+        background_color: '#ECECEC',
+        theme_color: '#ECECEC',
         start_url: './',
         scope: './',
         icons: [
@@ -25,25 +25,9 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,woff2,png,svg}'],
-        globIgnores: ['models/**'],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            // Cleanup model chunks: content-hashed, so cache forever.
-            urlPattern: ({ url }) => url.pathname.includes('/models/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'cleanup-model',
-              expiration: { maxEntries: 80 },
-              cacheableResponse: { statuses: [200] },
-            },
-          },
-        ],
-      },
+      workbox: { globPatterns: ['**/*.{js,css,html,woff2,png,svg}'] },
     }),
   ],
-  build: { target: 'es2020', chunkSizeWarningLimit: 1500 },
+  build: { target: 'es2020' },
   server: { host: true },
 });
