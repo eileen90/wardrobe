@@ -1727,9 +1727,6 @@ label.way {
 }
 
 /* ---------- redo the picture ---------- */
-.redo { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border-radius: 18px; background: rgba(0, 0, 0, 0.04); }
-.redo .note { margin: 0; }
-.redo .input { width: 100%; }
 
 .credit-line { display: flex; justify-content: center; margin: 28px 0 8px; opacity: 0.8; }
 /* ---------- polish ---------- */
@@ -1935,13 +1932,6 @@ label.way {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-.selbar__panel.redo {
-  margin: 0;
-  background: rgba(255, 255, 255, 0.5);
-}
-.selbar__switch {
-  justify-self: start;
 }
 @media (prefers-reduced-motion: reduce) {
   .selbar {

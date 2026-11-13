@@ -97,6 +97,8 @@ export interface Settings {
   currency: string;
   /** shortcuts the owner rebound, by id (see shortcuts.ts) */
   shortcuts?: Record<string, string>;
+  /** the model "redo the picture" uses; REDO_MODEL when unset */
+  redoModel?: string;
 }
 
 /** Credits one remake costs with each model. */

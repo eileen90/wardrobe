@@ -3,7 +3,7 @@ import { editPiece, redoPiece, removePiece, stopStudio } from '../lib/actions';
 import { brandFromSite, cleanUrl, siteOf } from '../lib/links';
 import { CURRENCIES, groupDigits, parsePrice, signOf } from '../lib/money';
 import { saveSettings, useStore } from '../lib/store';
-import { CATEGORIES, costOf, MODELS, REDO_MODEL, type Item } from '../lib/types';
+import { CATEGORIES, type Item } from '../lib/types';
 import { Garment, Icon, toast } from '../ui';
 
 /** A text field that saves as you leave it, so typing never fights the store. */
@@ -95,38 +95,6 @@ function LinkField({ item }: { item: Item }) {
   );
 }
 
-/**
- * Redo the picture. It uses the most faithful model unless you pick another, compares the last
- * attempt with the photo to find what went wrong, and takes your words into account if you add any.
- */
-function Redo({ item, onClose }: { item: Item; onClose: () => void }) {
-  const [model, setModel] = useState(REDO_MODEL);
-  const [note, setNote] = useState('');
-  const go = () => {
-    void redoPiece(item.id, { model, note: note.trim() });
-    onClose();
-  };
-  return (
-    <div className="redo">
-      <div className="chips is-row" role="group" aria-label="Model">
-        {MODELS.map((m) => (
-          <button key={m.id} className="pill" aria-pressed={model === m.id} title={m.hint} onClick={() => setModel(m.id)}>
-            {m.label}
-          </button>
-        ))}
-      </div>
-      <p className="note">{MODELS.find((m) => m.id === model)?.hint}. {costOf(model)} credits.
-        {item.state === 'ready' && ' It compares the last picture with your photo and fixes what it finds.'}</p>
-      <input className="input" value={note} placeholder="What's wrong? (optional, e.g. sleeves cut off)" aria-label="What's wrong"
-        enterKeyHint="go" onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && go()} />
-      <div className="slip__acts">
-        <button className="pill is-on" onClick={go}><Icon name="turn" />redo it</button>
-        <button className="pill" onClick={onClose}>not now</button>
-      </div>
-    </div>
-  );
-}
-
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(t.tagName);
 
 export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }: {
@@ -143,8 +111,6 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
   const hasKey = useStore((s) => !!s.settings.key);
   const fig = useRef<HTMLDivElement>(null);
   const [leaving, setLeaving] = useState(false);
-  const [redoing, setRedoing] = useState(false);
-  useEffect(() => setRedoing(false), [id]);
   const turned = useRef(0);
   const first = useRef(true);
 
@@ -285,8 +251,8 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
           <div className="slip__acts">
             <button className="pill is-on" onClick={() => onAddToLook(item.id)}>add to a look</button>
             <button className="pill" disabled={item.state !== 'ready'} onClick={() => onMix(item.id)}>mix with it</button>
-            {hasKey && !waiting && !redoing && (
-              <button className="pill" onClick={() => setRedoing(true)}>
+            {hasKey && !waiting && (
+              <button className="pill" onClick={() => void redoPiece(item.id)}>
                 <Icon name="turn" />redo the picture
               </button>
             )}
@@ -295,7 +261,6 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
             )}
             <button className="pill" onClick={remove}><Icon name="bin" />remove</button>
           </div>
-          {redoing && !waiting && <Redo item={item} onClose={() => setRedoing(false)} />}
         </div>
       </aside>
     </div>

@@ -3,7 +3,7 @@ import * as db from './db';
 import { record } from './history';
 import { getItem, getState, refreshPics, removeItem, removeLook, saveLook, updateItem } from './store';
 import { cancel, inLine, redo, resume, type RedoWith } from './studio';
-import type { Item, Look } from './types';
+import { REDO_MODEL, type Item, type Look } from './types';
 
 export function removePiece(id: string) {
   cancel(id);
@@ -76,9 +76,12 @@ async function begin(id: string, how: RedoWith, recheckKind: boolean): Promise<S
   return snap;
 }
 
+/** The model a redo uses: the one chosen in Settings, else the most faithful. */
+const redoModel = () => getState().settings.redoModel ?? REDO_MODEL;
+
 /** Redraw a piece's picture; undo stops it, or puts the old picture back once it has finished. */
 export async function redoPiece(id: string, how: RedoWith = {}) {
-  const snap = await begin(id, how, false);
+  const snap = await begin(id, { model: redoModel(), ...how }, false);
   if (snap) record('Redoing the picture', () => putBack(id, snap));
 }
 
@@ -86,7 +89,7 @@ export async function redoPiece(id: string, how: RedoWith = {}) {
 export async function redoMany(ids: string[], how: RedoWith = {}, { recheckKind = false } = {}) {
   const snaps: [string, Snap][] = [];
   for (const id of ids) {
-    const snap = await begin(id, how, recheckKind);
+    const snap = await begin(id, { model: redoModel(), ...how }, recheckKind);
     if (snap) snaps.push([id, snap]);
   }
   if (!snaps.length) return;
