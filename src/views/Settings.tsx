@@ -117,6 +117,13 @@ export function Settings({ hidden }: { hidden: boolean }) {
           }} />
         </div>
       </section>
+
+      <p className="credit-line">
+        <a href="https://pollinations.ai/?ref=badge" target="_blank" rel="noreferrer">
+          <img src="https://raw.githubusercontent.com/pollinations/pollinations/main/packages/ui/src/brand/badge-made-with.svg"
+            alt="Made with pollinations.ai" height="22" />
+        </a>
+      </p>
     </div>
   );
 }

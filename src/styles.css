@@ -1726,3 +1726,5 @@ label.way {
 .redo { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border-radius: 18px; background: rgba(0, 0, 0, 0.04); }
 .redo .note { margin: 0; }
 .redo .input { width: 100%; }
+
+.credit-line { display: flex; justify-content: center; margin: 28px 0 8px; opacity: 0.8; }

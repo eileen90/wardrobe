@@ -1,5 +1,9 @@
 # Wardrobe
 
+[![Made with pollinations.ai](https://raw.githubusercontent.com/pollinations/pollinations/main/packages/ui/src/brand/badge-made-with.svg)](https://pollinations.ai/?ref=badge)
+
+Try it: https://eileen90.github.io/wardrobe/
+
 My closet on any screen: every piece as a clean cut-out, laid out on a studio floor at its real
 size, to mix into outfits.
 
