@@ -514,43 +514,6 @@ img {
   font-weight: 300;
   letter-spacing: -0.045em;
 }
-.is-scatter .shelf {
-  opacity: 0;
-  transition: opacity 0.25s;
-  pointer-events: none;
-}
-.wordmark {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  text-align: center;
-  color: #3d3f58;
-  transition: opacity 0.5s var(--ease) 0.3s;
-  pointer-events: none;
-}
-/* Once the floor fills up the mark is only a faint stamp, not a message. */
-.wordmark:not(:has(p)) svg {
-  opacity: 0.28;
-}
-.wordmark svg {
-  width: 112px;
-  height: auto;
-  color: var(--blue);
-}
-.wordmark p {
-  margin: 0;
-  font-size: 19px;
-  line-height: 23px;
-  letter-spacing: -0.035em;
-}
-.is-grid .wordmark {
-  opacity: 0;
-  transition: opacity 0.25s;
-}
 
 .empty {
   position: absolute;
@@ -691,7 +654,8 @@ img {
   border-radius: 22px 22px 0 0;
   background: var(--paper);
   box-shadow: 0 -24px 60px -24px rgba(0, 0, 0, 0.4);
-  transform: translateY(102%);
+  /* Far enough down that neither its edge nor its shadow is left showing (on wide screens it floats above the bottom). */
+  transform: translateY(calc(100% + 120px));
   transition: transform 0.6s var(--sheet);
 }
 .sheet.is-on {
@@ -1171,12 +1135,6 @@ label.way {
   font-size: 13px;
   line-height: 18px;
 }
-
-/* ---------- mix ---------- */
-.mix {
-  position: relative;
-  overflow: hidden;
-}
 .mix__layers {
   position: absolute;
   z-index: 5;
@@ -1203,14 +1161,6 @@ label.way {
 .mix__layers .pill.is-on {
   background: var(--ink);
 }
-.mix__rows {
-  position: absolute;
-  left: 50%;
-  width: min(100%, 760px);
-  top: calc(var(--top) + var(--nav-h) + 66px);
-  bottom: 88px;
-  transform: translateX(-50%);
-}
 .mix__dock {
   position: absolute;
   z-index: 5;
@@ -1221,116 +1171,6 @@ label.way {
   align-items: center;
   justify-content: center;
   gap: 10px;
-}
-.row {
-  position: absolute;
-  left: 0;
-  right: 0;
-  touch-action: pan-y;
-}
-.row__g {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  cursor: grab;
-  touch-action: pan-y;
-}
-.row__g:active {
-  cursor: grabbing;
-}
-.row__count {
-  position: absolute;
-  z-index: 3;
-  right: 50px;
-  top: 14%;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-  transition: color 0.2s;
-}
-/* The rail the arrow keys are turning on its own. */
-.row.is-sel .row__count {
-  color: var(--blue);
-}
-.row.is-sel::before {
-  content: '';
-  position: absolute;
-  left: 52px;
-  top: 22%;
-  bottom: 22%;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--blue);
-  pointer-events: none;
-}
-.row__none {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  font-size: 14px;
-}
-.row .tag {
-  bottom: 6px;
-}
-.arrow {
-  position: absolute;
-  z-index: 6;
-  top: 50%;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 88px;
-  margin-top: -44px;
-  color: var(--ink);
-}
-.arrow svg {
-  width: 20px;
-  height: 30px;
-  transition: transform 0.35s var(--spring);
-}
-.arrow:active svg {
-  transform: scale(0.82);
-}
-.arrow.is-prev {
-  left: 0;
-}
-.arrow.is-next {
-  right: 0;
-}
-
-/* ---------- looks: the mixer, and what was saved from it ---------- */
-.looks {
-  position: absolute;
-  inset: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-}
-.looks::-webkit-scrollbar {
-  display: none;
-}
-.saved {
-  padding: 0 16px calc(var(--bottom) + 48px);
-}
-.saved__head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 18px 4px 16px;
-  border-top: 1px dashed var(--ink);
-}
-.saved__head h2 {
-  margin: 0;
-  font-size: 24px;
-  line-height: 26px;
-  font-weight: 300;
-  letter-spacing: -0.045em;
 }
 .looks__grid {
   display: grid;
@@ -1434,72 +1274,6 @@ label.way {
 .iconbtn svg {
   width: 22px;
   height: 22px;
-}
-.board__mid {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  padding: 4px 12px 8px;
-}
-.canvas {
-  position: relative;
-  overflow: hidden;
-  border-radius: 4px;
-  box-shadow: 0 26px 40px -30px rgba(0, 0, 0, 0.55);
-  touch-action: none;
-}
-.placed {
-  position: absolute;
-  top: 0;
-  left: 0;
-  touch-action: none;
-}
-.placed .garment {
-  filter: var(--cast);
-}
-.placed.is-sel::after {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border: 1px solid var(--blue);
-  pointer-events: none;
-}
-.handle {
-  position: absolute;
-  z-index: 5;
-  width: 30px;
-  height: 30px;
-  margin: -15px 0 0 -15px;
-  border-radius: 50%;
-  background: var(--blue);
-  box-shadow: 0 0 0 2px #fff, 0 6px 12px -4px rgba(0, 0, 0, 0.5);
-  touch-action: none;
-}
-.handle svg {
-  display: block;
-  width: 14px;
-  height: 14px;
-  margin: 8px;
-  color: #fff;
-}
-.board__tools {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 4px 12px;
-}
-.board__tools .pill {
-  min-height: 34px;
-  padding: 0 11px;
-  gap: 6px;
-  font-size: 13px;
-}
-.board__tools .pill svg {
-  width: 14px;
-  height: 14px;
 }
 /* A piece on its way from the drawer to the board. */
 .ghost {
@@ -1644,10 +1418,6 @@ label.way {
   .looks__grid {
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   }
-  .saved {
-    padding-left: max(16px, calc(50% - 560px));
-    padding-right: max(16px, calc(50% - 560px));
-  }
   .nav {
     left: 50%;
     right: auto;
@@ -1727,9 +1497,6 @@ label.way {
 }
 
 /* ---------- redo the picture ---------- */
-.redo { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border-radius: 18px; background: rgba(0, 0, 0, 0.04); }
-.redo .note { margin: 0; }
-.redo .input { width: 100%; }
 
 .credit-line { display: flex; justify-content: center; margin: 28px 0 8px; opacity: 0.8; }
 /* ---------- polish ---------- */
@@ -1755,11 +1522,10 @@ label.way {
 }
 /* Small controls keep their look but get a 44px target on touch screens. */
 @media (pointer: coarse) {
-  .pill,
-  .seg button,
-  .bubble,
-  .iconbtn.is-small,
-  .handle {
+.pill,
+.seg button,
+.bubble,
+.iconbtn.is-small {
     position: relative;
   }
   .pill::after,
@@ -1770,11 +1536,10 @@ label.way {
     position: absolute;
     inset: -4px -2px;
   }
-  .mix__layers .pill::after,
-  .drawer .pill::after,
-  .board__tools .pill::after,
-  .price .pill::after,
-  .linkchip .pill::after {
+.mix__layers .pill::after,
+.drawer .pill::after,
+.price .pill::after,
+.linkchip .pill::after {
     inset: -7px -3px;
   }
   .seg button::after,
@@ -1783,12 +1548,6 @@ label.way {
   }
   .iconbtn.is-small::after {
     inset: -7px;
-  }
-  .handle::after {
-    content: '';
-    position: absolute;
-    inset: -8px;
-    border-radius: 50%;
   }
 }
 
@@ -1833,15 +1592,6 @@ label.way {
 }
 .note button:disabled {
   opacity: 0.35;
-}
-/* ===== Account: end ===== */
-
-/* ===== Closet selection, zoom and clusters (src/views/Selection.tsx, Closet.tsx): start ===== */
-.sizer {
-  position: relative;
-}
-.floor.is-scatter {
-  touch-action: pan-x pan-y;
 }
 .piece {
   -webkit-touch-callout: none;
@@ -1936,212 +1686,9 @@ label.way {
   flex-wrap: wrap;
   gap: 6px;
 }
-.selbar__panel.redo {
-  margin: 0;
-  background: rgba(255, 255, 255, 0.5);
-}
-.selbar__switch {
-  justify-self: start;
-}
 @media (prefers-reduced-motion: reduce) {
   .selbar {
     animation: none;
-  }
-}
-/* ===== Closet selection: end ===== */
-/* ===== Looks: look builder (Mix slots, rail picker): start ===== */
-.mix .mix__lay {
-  width: min(calc(100% - 24px), 1040px);
-  transition: bottom 0.45s var(--ease);
-}
-.mix.is-picking .mix__lay {
-  bottom: 248px;
-}
-.slot {
-  position: absolute;
-  touch-action: pan-y;
-}
-.slot__g {
-  position: absolute;
-  cursor: pointer;
-  touch-action: pan-y;
-}
-.slot__g:active {
-  cursor: grabbing;
-}
-.slot .tag {
-  bottom: 4px;
-}
-/* The place being worked on: a quiet dashed frame. */
-.slot.is-sel::after,
-.slot.is-picking::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border: 1px dashed var(--blue);
-  border-radius: 14px;
-  pointer-events: none;
-}
-.slot__add {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 52px;
-  min-height: 44px;
-  border: 1px dashed rgba(0, 0, 0, 0.32);
-  border-radius: 14px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 15px;
-  transition: color 0.2s, border-color 0.2s, transform 0.45s var(--spring);
-}
-.slot__add svg {
-  width: 14px;
-  height: 14px;
-}
-.slot__add:hover {
-  color: var(--ink);
-  border-color: var(--ink);
-}
-.slot__add:active {
-  transform: translate(-50%, -50%) scale(0.95);
-}
-.slot__ctl {
-  position: absolute;
-  z-index: 4;
-  left: -4px;
-  right: -4px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  transform: translateY(-100%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-.slot__name {
-  min-height: 26px;
-  padding: 0 4px;
-  font-size: 12px;
-  line-height: 14px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.slot__name:hover {
-  color: var(--ink);
-}
-.slot__gap {
-  flex: 1;
-}
-.slot__btn {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  color: var(--muted);
-  transition: color 0.2s, background-color 0.2s;
-}
-.slot__btn:hover {
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.6);
-}
-.slot__btn[aria-pressed='true'] {
-  color: #fff;
-  background: var(--ink);
-}
-.slot__btn svg {
-  width: 15px;
-  height: 15px;
-}
-.slot__kept {
-  position: absolute;
-  z-index: 3;
-  right: -2px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--ink);
-  color: #fff;
-  transform: translateY(-80%);
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-.slot__kept svg {
-  width: 13px;
-  height: 13px;
-}
-.slot__arrow {
-  position: absolute;
-  z-index: 4;
-  top: 50%;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 48px;
-  margin-top: -24px;
-  border-radius: 12px;
-  color: var(--ink);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s, background-color 0.2s;
-}
-.slot__arrow svg {
-  width: 18px;
-  height: 18px;
-  transition: transform 0.35s var(--spring);
-}
-.slot__arrow:active svg {
-  transform: scale(0.8);
-}
-.slot__arrow.is-prev {
-  left: -10px;
-}
-.slot__arrow.is-next {
-  right: -10px;
-}
-@media (hover: hover) {
-  .slot:hover .slot__ctl,
-  .slot.is-sel .slot__ctl,
-  .slot.is-picking .slot__ctl,
-  .slot:hover .slot__arrow,
-  .slot.is-sel .slot__arrow,
-  .slot.is-picking .slot__arrow {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .slot:hover .slot__kept,
-  .slot.is-sel .slot__kept,
-  .slot.is-picking .slot__kept {
-    opacity: 0;
-  }
-  .slot__arrow:hover {
-    background: rgba(255, 255, 255, 0.55);
-  }
-}
-/* On touch, a piece is swiped; the arrows show on the place being worked on. */
-@media (hover: none) {
-  .slot__ctl {
-    display: none;
-  }
-  .slot.is-sel .slot__arrow,
-  .slot.is-picking .slot__arrow {
-    opacity: 0.8;
-    pointer-events: auto;
-  }
-  .slot__arrow.is-prev {
-    left: -6px;
-  }
-  .slot__arrow.is-next {
-    right: -6px;
   }
 }
 
@@ -2248,9 +1795,6 @@ label.way {
   font-size: 10px;
 }
 @media (max-width: 520px) {
-  .mix.is-picking .mix__lay {
-    bottom: 236px;
-  }
   .pick {
     bottom: 80px;
   }
@@ -2267,3 +1811,224 @@ label.way {
   }
 }
 /* ===== Looks: look builder: end ===== */
+
+/* ===== One canvas (src/views/Canvas.tsx): the closet floor, the looks page, boards ===== */
+.canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+.canvas__world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.canvas__world.is-easing {
+  transition: transform 0.45s var(--ease);
+}
+.canvas__paper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 4px;
+  box-shadow: 0 26px 40px -30px rgba(0, 0, 0, 0.55);
+}
+.piece__pic {
+  width: 100%;
+  height: 100%;
+}
+.piece.is-settling {
+  transition: transform 0.3s var(--ease);
+}
+.piece.is-lifted .piece__in {
+  transform: none;
+}
+@media (hover: hover) {
+  .canvas {
+    cursor: grab;
+  }
+  .canvas.is-panning {
+    cursor: grabbing;
+  }
+  .canvas.is-resizing-key .piece,
+  .canvas.is-resizing-key .piece:hover {
+    cursor: ns-resize;
+  }
+  .canvas.is-carrying .piece {
+    cursor: grabbing;
+  }
+}
+/* Where a carried piece will land: the same quiet frame on the floor and in the rails. */
+.drop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: calc(1.5px * var(--zi, 1)) dashed var(--blue);
+  border-radius: calc(22px * var(--zi, 1));
+  background: rgba(10, 20, 255, 0.04);
+  pointer-events: none;
+  animation: drop-in 0.25s var(--ease) both;
+}
+@keyframes drop-in {
+  from {
+    opacity: 0;
+  }
+}
+.clabel.is-target,
+.shelf.is-target h2 {
+  color: var(--blue);
+  opacity: 1;
+}
+.closet__view {
+  position: absolute;
+  inset: 0;
+  animation: fade 0.35s var(--ease) both;
+}
+
+/* ----- the looks page ----- */
+.looks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.mix {
+  position: absolute;
+  inset: 0;
+}
+.mix__layers {
+  pointer-events: none;
+}
+.mix__layers > * {
+  pointer-events: auto;
+}
+.mix__layers .pill.is-add {
+  gap: 4px;
+  padding: 0 10px 0 8px;
+  color: var(--muted);
+  border-style: dashed;
+}
+.mix__layers .pill.is-add svg {
+  width: 12px;
+  height: 12px;
+}
+.mix__layers .pill.is-add:hover {
+  color: var(--ink);
+}
+.mix__dock {
+  bottom: calc(var(--bottom) + 18px);
+  pointer-events: none;
+}
+.mix__dock > * {
+  pointer-events: auto;
+}
+.round .dot.is-quiet {
+  background: var(--ink);
+}
+
+/* Controls on a piece: small icons only, on hover, on the rail being worked on, or on the selection. */
+.canvas__hud {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.canvas__hud [data-hud] > * {
+  pointer-events: auto;
+}
+.hud__arrow,
+.hud__btn,
+.hud__kept {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+.hud__arrow {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.45);
+  animation: hud-in 0.2s var(--ease) both;
+  transition: transform 0.35s var(--spring), background-color 0.2s;
+}
+.hud__arrow:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+.hud__arrow:active {
+  transform: scale(0.88);
+}
+.hud__arrow svg {
+  width: 18px;
+  height: 18px;
+}
+.hud__bar {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -100%);
+  animation: hud-in 0.2s var(--ease) both;
+}
+.hud__btn {
+  width: 30px;
+  height: 30px;
+  color: var(--ink);
+  transition: background-color 0.2s, color 0.2s;
+}
+.hud__btn:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+.hud__btn[aria-pressed='true'] {
+  color: #fff;
+  background: var(--ink);
+}
+.hud__btn svg {
+  width: 15px;
+  height: 15px;
+}
+.hud__kept {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  background: var(--ink);
+  pointer-events: none !important;
+}
+.hud__kept svg {
+  width: 12px;
+  height: 12px;
+}
+@keyframes hud-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ----- a saved look ----- */
+.board__mid {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.board__hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+/* ===== One canvas: end ===== */

@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { deleteLook, keepLook } from '../lib/actions';
+import { isKey } from '../lib/shortcuts';
 import { addPiece, newLook } from '../lib/boards';
 import { saveLook, useStore } from '../lib/store';
 import { BOARD_RATIO, type Item, type Look } from '../lib/types';
@@ -30,37 +32,41 @@ export function MiniBoard({ look, items }: { look: Look; items: Item[] }) {
 }
 
 /**
- * Looks: one page for outfits. The mixer on top makes them, the saved ones sit right under it.
+ * Looks: the outfit being put together fills the page; saved looks open from a sheet, each on
+ * its own board on top, so the outfit here is never touched by them.
  */
-export function Looks({ hidden, active, startWith, onOpen, onAdd }: {
+export function Looks({ hidden, active, startWith, onOpen, onFocus, onAdd }: {
   hidden: boolean;
   active: boolean;
   startWith: string | null;
   onOpen: (id: string) => void;
+  onFocus: (id: string, from: DOMRect, sequence: string[]) => void;
   onAdd: () => void;
 }) {
   const looks = useStore((s) => s.looks);
   const items = useStore((s) => s.items);
+  const [list, setList] = useState(false);
 
+  const open = (id: string) => { setList(false); onOpen(id); };
   const create = async () => {
     const l = newLook(looks.length);
     await saveLook(l);
-    onOpen(l.id);
+    open(l.id);
   };
 
   return (
     <div className="looks" hidden={hidden}>
-      {/* The saved looks peek over the bottom edge, so it is plain there is more below. */}
-      <Mix startWith={startWith} active={active} tall={looks.length ? 'calc(100% - 78px)' : '100%'} onOpenLook={onOpen} onAdd={onAdd} />
-      <section className="saved">
-        <header className="saved__head">
-          <h2>Saved</h2>
-          <span className="small muted num">{looks.length}</span>
-        </header>
-        <div className="looks__grid">
+      <Mix startWith={startWith} active={active && !list} onSaved={open} onFocus={onFocus} onAdd={onAdd}>
+        <button className="round glass is-quiet" aria-label="Saved looks" title="Saved looks" onClick={() => setList(true)}>
+          <Icon name="looks" />{looks.length > 0 && <span className="dot is-quiet">{looks.length}</span>}
+        </button>
+      </Mix>
+      <Sheet open={list} onClose={() => setList(false)} label="Saved looks">
+        <div className="sheet__head"><h2>Saved</h2><span className="small muted num">{looks.length}</span></div>
+        <div className="looks__grid is-tight">
           {looks.map((l) => (
-            <button key={l.id} className="lookcard" onClick={() => onOpen(l.id)}
-              onKeyDown={(e) => { if (e.key === 'Delete' || e.key === 'Backspace') deleteLook(l.id); }}>
+            <button key={l.id} className="lookcard" onClick={() => open(l.id)}
+              onKeyDown={(e) => { if (isKey(e, 'remove') || isKey(e, 'clear')) deleteLook(l.id); }}>
               <MiniBoard look={l} items={items} />
               <span className="lookcard__name">{l.name || 'Untitled'}</span>
             </button>
@@ -70,7 +76,7 @@ export function Looks({ hidden, active, startWith, onOpen, onAdd }: {
             <span className="lookcard__name">Empty board</span>
           </button>
         </div>
-      </section>
+      </Sheet>
     </div>
   );
 }
