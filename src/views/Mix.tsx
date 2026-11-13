@@ -187,9 +187,12 @@ function arrange(picks: Partial<Record<RailId, Item>>): Placed[] {
   put(picks.outer, outer, Math.max(fx(outer.w) / 2 + 0.03, cx - fx(body) / 2 - fx(outer.w) * 0.22), y0 + 0.01 + fy(outer.h) / 2);
   put(picks.shoes, shoes, Math.min(1 - fx(shoes.w) / 2 - 0.03, cx + fx(body) / 2 + fx(shoes.w) * 0.2), Math.min(0.97 - fy(shoes.h) / 2, y0 + fy(column) + fy(shoes.h) * 0.2));
   // Socks lie just left of the shoes; an accessory sits up by the shoulder, opposite any coat.
-  put(picks.socks, socks, Math.max(fx(socks.w) / 2 + 0.03, cx - fx(socks.w) * 0.6), Math.min(0.97 - fy(socks.h) / 2, y0 + fy(column) + fy(socks.h) * 0.15));
+  put(picks.socks, socks, Math.max(fx(socks.w) / 2 + 0.03, cx - fx(socks.w) * 0.6), Math.min(0.97 - fy(socks.h) / 2, y0 + fy(column) + fy(socks.h) * 0.55));
   put(picks.extra, extra, Math.min(1 - fx(extra.w) / 2 - 0.03, cx + fx(body) / 2 + fx(extra.w) * 0.3), y0 + fy(extra.h) / 2 + 0.02);
-  put(picks.bag, bag, Math.max(fx(bag.w) / 2 + 0.04, cx - fx(body) / 2 - fx(bag.w) * 0.5), Math.min(0.95 - fy(bag.h) / 2, y0 + fy(column) * 0.78));
+  // A bag hangs on the side the coat is not on, so the two never fight for one corner.
+  put(picks.bag, bag,
+    picks.outer ? Math.min(1 - fx(bag.w) / 2 - 0.03, cx + fx(body) / 2 + fx(bag.w) * 0.3) : Math.max(fx(bag.w) / 2 + 0.04, cx - fx(body) / 2 - fx(bag.w) * 0.5),
+    Math.min(0.95 - fy(bag.h) / 2, y0 + fy(column) * (picks.outer ? 0.55 : 0.78)));
   return out;
 }
 

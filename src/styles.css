@@ -532,6 +532,10 @@ img {
   transition: opacity 0.5s var(--ease) 0.3s;
   pointer-events: none;
 }
+/* Once the floor fills up the mark is only a faint stamp, not a message. */
+.wordmark:not(:has(p)) svg {
+  opacity: 0.28;
+}
 .wordmark svg {
   width: 112px;
   height: auto;
@@ -631,7 +635,7 @@ img {
   position: fixed;
   z-index: 200;
   left: 50%;
-  top: calc(var(--top) + var(--nav-h) + 20px);
+  bottom: calc(var(--bottom) + 92px);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -645,7 +649,7 @@ img {
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, -10px);
+  transform: translate(-50%, 10px);
   transition: opacity 0.2s, transform 0.45s var(--spring);
 }
 .toast.is-on {
@@ -1728,3 +1732,84 @@ label.way {
 .redo .input { width: 100%; }
 
 .credit-line { display: flex; justify-content: center; margin: 28px 0 8px; opacity: 0.8; }
+/* ---------- polish ---------- */
+/* The kind chips in a piece's slip wrap, so socks and accessories are never hidden off the edge. */
+.slip .chips.is-row {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+}
+.slip .chips.is-row .pill {
+  min-height: 36px;
+}
+.toast button,
+.status button {
+  position: relative;
+}
+.toast button::after,
+.status button::after {
+  content: '';
+  position: absolute;
+  inset: -14px -10px;
+}
+/* Small controls keep their look but get a 44px target on touch screens. */
+@media (pointer: coarse) {
+  .pill,
+  .seg button,
+  .bubble,
+  .iconbtn.is-small,
+  .handle {
+    position: relative;
+  }
+  .pill::after,
+  .seg button::after,
+  .bubble::after,
+  .iconbtn.is-small::after {
+    content: '';
+    position: absolute;
+    inset: -4px -2px;
+  }
+  .mix__layers .pill::after,
+  .drawer .pill::after,
+  .board__tools .pill::after,
+  .price .pill::after,
+  .linkchip .pill::after {
+    inset: -7px -3px;
+  }
+  .seg button::after,
+  .bubble::after {
+    inset: -9px -3px;
+  }
+  .iconbtn.is-small::after {
+    inset: -7px;
+  }
+  .handle::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+  }
+}
+
+.floor.is-grid {
+  overflow-x: hidden;
+}
+
+/* The status line never wraps into a tall blob, and toasts keep clear of the sheet under them. */
+.status {
+  width: max-content;
+}
+.status span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app:has(.focus, .board) .toast {
+  top: calc(var(--top) + 66px);
+  bottom: auto;
+  transform: translate(-50%, -10px);
+}
+.app:has(.focus, .board) .toast.is-on {
+  transform: translate(-50%, 0);
+}
