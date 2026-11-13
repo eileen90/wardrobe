@@ -114,5 +114,4 @@ Pushing to `main` builds and publishes the site with GitHub Pages (`.github/work
 5. Its real size is estimated from kind, length and outline, and used wherever pieces sit side
    by side (`realSize` in `src/lib/kind.ts`).
 
-Built with React, TypeScript and Vite as an installable PWA. `reference/` holds the prompts the
-design was based on.
+Built with React, TypeScript and Vite as an installable PWA.

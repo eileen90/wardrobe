@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepLook, step } from '../lib/actions';
-import { BH, boxOnBoard, BW, fitBoard, flatLay, LAYER, LOOK_CM, newLook } from '../lib/boards';
+import { BH, boxOnBoard, BW, editPieces, fitBoard, flatLay, LABELS, LAYER, LOOK_CM, newLook, type Edit } from '../lib/boards';
 import { bounds } from '../lib/canvas';
 import { realSize } from '../lib/kind';
 import { covered, hint, isKey, useBindings } from '../lib/shortcuts';
@@ -8,8 +8,7 @@ import { getState, saveSettings, useStore } from '../lib/store';
 import { BOARD_RATIO, uid, type Category, type Item, type Placed, type WorkingLook } from '../lib/types';
 import { Icon, Mark, toast } from '../ui';
 import { Canvas, type CanvasApi, type CanvasPiece } from './Canvas';
-import { editPieces, LABELS } from './Board';
-import { Lock, RailPicker } from './RailPicker';
+import { RailPicker } from './RailPicker';
 import { ArrangeSelection } from './Selection';
 
 /** The rails an outfit is built from. Tops and dresses share one. */
@@ -185,7 +184,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
     const item = items.find((i) => i.id === p.itemId);
     return item && p.rail && worn.get(p.rail as RailId)?.id === item.id ? [{ id: p.id, item, box: boxOnBoard(p, item, z + 1), flip: p.flip }] : [];
   }), [work.pieces, items, worn]);
-  const edit = (a: Parameters<typeof editPieces>[1], ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}, key?: string) => {
+  const edit = (a: Edit, ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}, key?: string) => {
     if (a === 'remove') return clear(ids.map(railOf).filter((r): r is RailId => !!r));
     if (a === 'duplicate') return;
     const next = editPieces(work.pieces, a, ids, arg);
@@ -268,7 +267,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
           const kept = work.kept.includes(r);
           const n = pools[r].length;
           const show = s.hover || s.selected || picking === r || (!s.anyHover && !sel.size && cur === r);
-          if (!show) return kept ? <span className="hud__kept" style={{ left: at.x + at.w - 10, top: at.y - 6 }}><Lock shut /></span> : null;
+          if (!show) return kept ? <span className="hud__kept" style={{ left: at.x + at.w - 10, top: at.y - 6 }}><Icon name="lock" /></span> : null;
           const midY = at.y + at.h / 2;
           return (
             <>
@@ -278,7 +277,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
                 onClick={() => { setCur(r); stepRail(r, 1); }}><Icon name="right" /></button>}
               <span className="hud__bar" style={{ left: at.x + at.w / 2, top: Math.max(at.y - 8, top + 96) }}>
                 <button className="hud__btn" aria-label={`All ${RAIL[r].title}`} aria-pressed={picking === r} onClick={() => { setCur(r); setPicking(picking === r ? null : r); }}><Icon name="grid" /></button>
-                <button className="hud__btn" aria-label={kept ? `Let go of this ${RAIL[r].label}` : `Keep this ${RAIL[r].label}`} aria-pressed={kept} onClick={() => keep(r)}><Lock shut={kept} /></button>
+                <button className="hud__btn" aria-label={kept ? `Let go of this ${RAIL[r].label}` : `Keep this ${RAIL[r].label}`} aria-pressed={kept} onClick={() => keep(r)}><Icon name={kept ? 'lock' : 'unlock'} /></button>
                 <button className="hud__btn" aria-label={`Take off the ${RAIL[r].label}`} onClick={() => clear([r])}><Icon name="x" /></button>
               </span>
             </>
@@ -289,7 +288,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
         <div className="mix__layers">
           <button className="pill is-small" aria-pressed={work.wish}
             onClick={() => set({ ...work, wish: !work.wish }, work.wish ? 'Wishlist hidden' : 'Wishlist shown', { quiet: true })}>wishlist</button>
-          {work.kept.length > 0 && <button className="pill is-small" onClick={() => set({ ...work, kept: [] }, 'Let go')}><Lock shut={false} />let go</button>}
+          {work.kept.length > 0 && <button className="pill is-small" onClick={() => set({ ...work, kept: [] }, 'Let go')}><Icon name="unlock" />let go</button>}
           {missing.map((r) => (
             <button key={r.id} className="pill is-small is-add" onClick={() => add(r.id)} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>
           ))}

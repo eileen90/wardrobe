@@ -5,15 +5,16 @@ import {
   clusterOf, dropTarget, groupName, groupOf, GROUPS, layFloor, orderOnFloor, rank, reflow, unsorted,
   PX, type FloorLayout, type GroupId,
 } from '../lib/floor';
+import { LABELS, type PieceAction } from '../lib/boards';
 import { realSize } from '../lib/kind';
 import { covered, held, hint, isKey, isPointer, useBindings } from '../lib/shortcuts';
 import { saveSettings, updateItem, useStore } from '../lib/store';
 import { CATEGORIES, catPlural, type Category, type Item } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, useViewport } from '../ui';
-import { Canvas, type CanvasAction, type CanvasApi, type CanvasPiece } from './Canvas';
+import { Canvas, type CanvasApi, type CanvasPiece } from './Canvas';
 import { ClosetSelection } from './Selection';
 
-export interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
+interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
 
 const clampS = (s: number) => Math.min(4, Math.max(0.3, s));
 
@@ -210,7 +211,7 @@ function Rails({ shown, items, floor, sel, setSel, order, onOpen, sequence }: {
       const cluster = clusterOf(next);
       const mates = [...items.filter((i) => i.id !== item.id && clusterOf(i) === cluster), next]
         .sort((p, q) => GROUPS.indexOf(groupOf(p)) - GROUPS.indexOf(groupOf(q)) || rank(p) - rank(q));
-      const places = reflow(floor, items, cluster, mates);
+      const places = reflow(floor, cluster, mates);
       const patches: [string, Partial<Item>][] = [[item.id, {
         order, pos: places.get(item.id),
         ...(moved ? { category: target.cat, kindSure: true, kindByHand: true } : {}),
@@ -380,7 +381,7 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
       return it?.pos ? [[id, { pos: { ...it.pos, s: clampS((it.pos.s ?? 1) * k) } }] as [string, Partial<Item>]] : [];
     }), 'Resized', keyed ? { key: 'size:' + ids.join() } : {});
   };
-  const acted = (a: CanvasAction, ids: string[]) => {
+  const acted = (a: PieceAction, ids: string[]) => {
     if (a === 'remove') { removeMany(ids); setSel(new Set()); return; }
     const zs = [...floor.boxes.values()].map((b) => b.z);
     const top = Math.max(...zs), bottom = Math.min(...zs);
@@ -392,7 +393,7 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
       return null;
     };
     const patches = ids.flatMap((id, k) => { const it = items.find((i) => i.id === id); const p = it && patch(it, k); return p ? [[id, p] as [string, Partial<Item>]] : []; });
-    arrange(patches, a === 'forward' ? 'Brought forward' : a === 'backward' ? 'Sent back' : 'Flipped');
+    arrange(patches, LABELS[a]);
   };
   const dragging = (ids: string[], dx: number, dy: number) => {
     if (!ids.length) return setDrop(null);

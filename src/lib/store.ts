@@ -48,12 +48,6 @@ function upgrade(i: Item): boolean {
     i.category = 'socks';
     changed = true;
   }
-  // Places set by hand on the floor before it had clusters left pieces stranded far from
-  // them. The floor now keeps its own places (`pos`); these are let go.
-  if (i.spot) {
-    delete i.spot;
-    changed = true;
-  }
   // Anything caught mid-run by a closed tab goes back in the queue.
   if (i.state === 'working') i.state = 'queued';
   // Earlier versions gave up on a photo when the studio was out of credits or unreachable.
@@ -217,7 +211,7 @@ function dropUrls(id: string) {
 /** Call after an item's pictures were rewritten. */
 export const refreshPics = dropUrls;
 
-export async function picUrl(item: Item, want: 'thumb' | 'full'): Promise<string | null> {
+async function picUrl(item: Item, want: 'thumb' | 'full'): Promise<string | null> {
   const kind: db.Pic = item.state === 'ready' ? (want === 'thumb' ? 'thumb' : 'cut') : 'raw';
   const key = `${item.id}:${kind}:${item.rev}`;
   const hit = urls.get(key);

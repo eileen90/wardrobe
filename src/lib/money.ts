@@ -53,6 +53,3 @@ export function groupDigits(amount: string) {
   const [w, d] = amount.split('.');
   return w.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (d ? '.' + d : '');
 }
-
-export const formatPrice = (amount: string, currency: string) =>
-  amount ? `${signOf(currency)}${groupDigits(amount)}` : '';

@@ -21,7 +21,7 @@ type Screen = 'closet' | 'looks' | 'board' | 'piece';
 const ALL: Screen[] = ['closet', 'looks', 'board', 'piece'];
 const CANVAS: Screen[] = ['closet', 'looks', 'board'];
 
-export interface Shortcut {
+interface Shortcut {
   id: ShortcutId;
   label: string;
   where: string;
@@ -88,7 +88,6 @@ function parse(binding: string): Parsed {
   return { mod: mods.has('mod'), alt: mods.has('alt'), shift: mods.has('shift'), key: SAME[k] ?? k };
 }
 const gesture = (b: Parsed) => GESTURES.includes(b.key);
-export const isGesture = (id: ShortcutId) => gesture(parse(bindingOf(id)));
 /** Shortcuts rebound by choosing a modifier rather than pressing keys. */
 export const byModifier = (id: ShortcutId) => { const b = parse(defaultOf(id)); return gesture(b) || b.key === 'arrows'; };
 

@@ -97,7 +97,7 @@ const boxOf = (p: Placed, item: Item): Box => ({ x: p.x, y: p.y, w: p.w, h: (p.w
  * Centimetres to the board's width that the pieces already there use. Pieces may have been
  * resized by hand, so the middle one counts, not the average.
  */
-export function boardScale(pieces: Placed[], items: Item[]): number {
+function boardScale(pieces: Placed[], items: Item[]): number {
   const find = finder(items);
   const ks = pieces
     .map((p) => { const it = find(p.itemId); return it && p.w > 0 ? realSize(it).w / p.w : 0; })
@@ -199,10 +199,10 @@ function scaleAll(pieces: Placed[], k: number, cx = 0.5, cy = 0.5, tx = 0.5, ty 
  * its kind belongs (or where it was dropped). If it is too big for the board at that scale, the
  * whole board shrinks so it fits. Returns the board's new pieces; the new one is last.
  */
-export function addPiece(pieces: Placed[], items: Item[], item: Item, at?: { x: number; y: number }, scale?: number): Placed[] {
+export function addPiece(pieces: Placed[], items: Item[], item: Item, at?: { x: number; y: number }): Placed[] {
   const find = finder(items);
   const s = realSize(item);
-  const cmW = pieces.length || !scale ? boardScale(pieces, items) : scale;
+  const cmW = boardScale(pieces, items);
   let w = s.w / cmW, h = (s.h / cmW) * BOARD_RATIO;
   let out = pieces;
   const k = Math.min(1, (1 - 2 * EDGE) / w, (1 - 2 * EDGE) / h);
@@ -240,19 +240,36 @@ export function fitBoard(pieces: Placed[], items: Item[], grow = 1): Placed[] {
   return scaleAll(pieces, k, (l + r) / 2, (t + u) / 2, 0.5, 0.5);
 }
 
+/* ---------- changing the pieces on a board ---------- */
+
+/** What can be done to pieces lying on a canvas, besides moving and resizing them. */
+export type PieceAction = 'remove' | 'forward' | 'backward' | 'flip' | 'duplicate';
+export type Edit = PieceAction | 'move' | 'resize';
+
 /**
- * Lay out a whole outfit on a fresh board, piece by piece in the order given (body first), then
- * fit it to the board. It is first laid out on a roomy board so nothing is squeezed while it is
- * being placed, then made as large as fits, but never larger than an empty board's scale.
+ * A look's pieces after a change. Shared by saved looks and the looks page, so moving,
+ * resizing, layering, flipping and removing mean the same on both.
  */
-export function layOut(picks: Item[], items: Item[]): Placed[] {
-  const size = (c: Category[]) => picks.filter((i) => c.includes(i.category)).map(realSize);
-  const sum = (c: Category[]) => size(c).reduce((t, s) => t + s.h, 0);
-  const widest = (c: Category[]) => Math.max(0, ...size(c).map((s) => s.w));
-  const column = sum(['top', 'dress']) + sum(['bottom']) + Math.max(0, ...size(['shoes', 'socks']).map((s) => s.h));
-  const across = widest(['top', 'dress', 'bottom']) + widest(['outer']) + widest(['bag', 'extra']) + widest(['socks']);
-  const cmH = Math.max(EMPTY_CM, column * 1.5, (across * 1.5) / BOARD_RATIO, ...picks.map((p) => realSize(p).h * 1.5));
-  let pieces: Placed[] = [];
-  for (const it of picks) pieces = addPiece(pieces, items, it, undefined, cmH * BOARD_RATIO);
-  return fitBoard(pieces, items, cmH / EMPTY_CM);
+export function editPieces(pieces: Placed[], a: Edit, ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}): Placed[] | null {
+  const on = new Set(ids);
+  switch (a) {
+    case 'move':
+      return pieces.map((p) => (on.has(p.id) ? { ...p, x: p.x + (arg.dx ?? 0) / BW, y: p.y + (arg.dy ?? 0) / BH, byHand: true } : p));
+    case 'resize':
+      return pieces.map((p) => (on.has(p.id) ? { ...p, w: Math.min(2, Math.max(0.03, p.w * (arg.k ?? 1))), byHand: true } : p));
+    case 'remove':
+      return pieces.filter((p) => !on.has(p.id));
+    case 'forward':
+      return [...pieces.filter((p) => !on.has(p.id)), ...pieces.filter((p) => on.has(p.id))];
+    case 'backward':
+      return [...pieces.filter((p) => on.has(p.id)), ...pieces.filter((p) => !on.has(p.id))];
+    case 'flip':
+      return pieces.map((p) => (on.has(p.id) ? { ...p, flip: !p.flip } : p));
+    case 'duplicate':
+      return [...pieces, ...pieces.filter((p) => on.has(p.id)).map((p) => ({ ...p, id: uid(), x: p.x + 0.05, y: p.y + 0.04 }))];
+  }
 }
+/** What every change is called, in its toast and its undo, wherever it is made. */
+export const LABELS: Record<Edit, string> = {
+  move: 'Moved', resize: 'Resized', remove: 'Removed', forward: 'Brought forward', backward: 'Sent back', flip: 'Flipped', duplicate: 'Copied',
+};

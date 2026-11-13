@@ -1,41 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { deleteLook, step } from '../lib/actions';
-import { addPiece, BH, boxOnBoard, BW, widthOn } from '../lib/boards';
+import { addPiece, BH, boxOnBoard, BW, editPieces, LABELS, widthOn, type Edit } from '../lib/boards';
 import { shareLook } from '../lib/exportBoard';
 import { undoLast, useLastStep } from '../lib/history';
 import { covered, hint, isDone, isKey, useBindings } from '../lib/shortcuts';
 import { removeLook, saveLook, useStore } from '../lib/store';
-import { CATEGORIES, PAPERS, uid, type Category, type Item, type Look, type Placed } from '../lib/types';
+import { CATEGORIES, PAPERS, type Category, type Item, type Look } from '../lib/types';
 import { Garment, Icon, Sheet, toast } from '../ui';
-import { Canvas, type CanvasAction, type CanvasApi, type CanvasPiece } from './Canvas';
+import { Canvas, type CanvasApi, type CanvasPiece } from './Canvas';
 import { ArrangeSelection } from './Selection';
-
-/**
- * Change a look's pieces as one step in the history. Shared by saved boards and the looks page,
- * so moving, resizing, layering, flipping and removing mean the same on both.
- */
-export function editPieces(pieces: Placed[], a: CanvasAction | 'move' | 'resize', ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}): Placed[] | null {
-  const on = new Set(ids);
-  switch (a) {
-    case 'move':
-      return pieces.map((p) => (on.has(p.id) ? { ...p, x: p.x + (arg.dx ?? 0) / BW, y: p.y + (arg.dy ?? 0) / BH, byHand: true } : p));
-    case 'resize':
-      return pieces.map((p) => (on.has(p.id) ? { ...p, w: Math.min(2, Math.max(0.03, p.w * (arg.k ?? 1))), byHand: true } : p));
-    case 'remove':
-      return pieces.filter((p) => !on.has(p.id));
-    case 'forward':
-      return [...pieces.filter((p) => !on.has(p.id)), ...pieces.filter((p) => on.has(p.id))];
-    case 'backward':
-      return [...pieces.filter((p) => on.has(p.id)), ...pieces.filter((p) => !on.has(p.id))];
-    case 'flip':
-      return pieces.map((p) => (on.has(p.id) ? { ...p, flip: !p.flip } : p));
-    case 'duplicate':
-      return [...pieces, ...pieces.filter((p) => on.has(p.id)).map((p) => ({ ...p, id: uid(), x: p.x + 0.05, y: p.y + 0.04 }))];
-  }
-}
-export const LABELS: Record<CanvasAction | 'move' | 'resize', string> = {
-  move: 'Moved', resize: 'Resized', remove: 'Removed', forward: 'Brought forward', backward: 'Sent back', flip: 'Flipped', duplicate: 'Copied',
-};
 
 /** A saved look, opened on its own on top of everything: a free board with paper. */
 export function Board({ id, onClose, onFocus }: {
@@ -63,7 +36,7 @@ export function Board({ id, onClose, onFocus }: {
     void saveLook(next);
     step(label, () => void saveLook(before), { key, quiet });
   };
-  const edit = (a: CanvasAction | 'move' | 'resize', ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}, key?: string) => {
+  const edit = (a: Edit, ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}, key?: string) => {
     const cur = live.current;
     if (!cur) return;
     const pieces = editPieces(cur.pieces, a, ids, arg);

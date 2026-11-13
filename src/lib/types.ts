@@ -11,7 +11,6 @@ export const CATEGORIES: { id: Category; label: string; plural: string }[] = [
   { id: 'bag', label: 'bag', plural: 'bags' },
   { id: 'extra', label: 'accessory', plural: 'accessories' },
 ];
-export const catLabel = (c: Category) => CATEGORIES.find((x) => x.id === c)!.label;
 export const catPlural = (c: Category) => CATEGORIES.find((x) => x.id === c)!.plural;
 export const isCategory = (v: unknown): v is Category => CATEGORIES.some((c) => c.id === v);
 
@@ -25,7 +24,7 @@ export const LENGTHS: Length[] = ['cropped', 'hip', 'thigh', 'knee', 'calf', 'an
  * ready   – clean cut-out available
  * raw     – only the original photo: no studio key yet, or this one could not be cut out
  */
-export type ItemState = 'queued' | 'working' | 'ready' | 'raw';
+type ItemState = 'queued' | 'working' | 'ready' | 'raw';
 
 export interface Item {
   id: string;
@@ -57,8 +56,6 @@ export interface Item {
   from: 'photo' | 'web';
   /** bumped whenever the pictures change, so cached URLs refresh */
   rev: number;
-  /** where the previous floor layout put it by hand; dropped on load (see store.ts) */
-  spot?: { x: number; y: number; t: number };
   /**
    * Its place on the closet floor: centre in centimetres, the cluster it was put in (a piece whose
    * kind changes is given a new place), and any resizing (s), flipping (f) or layering (z) by hand.

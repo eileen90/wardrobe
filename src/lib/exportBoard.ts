@@ -1,9 +1,10 @@
+import { download } from './backup';
 import * as db from './db';
 import { loadImage, makeCanvas, toBlob } from './img';
 import { BOARD_RATIO, type Item, type Look } from './types';
 
 /** Draw a look as a picture, with the same soft shadows as on screen. */
-export async function renderLook(look: Look, items: Item[], width = 1600): Promise<Blob> {
+async function renderLook(look: Look, items: Item[], width = 1600): Promise<Blob> {
   const W = width, H = Math.round(width / BOARD_RATIO);
   const c = makeCanvas(W, H);
   const ctx = c.getContext('2d')!;
@@ -44,10 +45,6 @@ export async function shareLook(look: Look, items: Item[]) {
       if ((e as Error).name === 'AbortError') return 'cancelled' as const;
     }
   }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  download(blob, name);
   return 'saved' as const;
 }

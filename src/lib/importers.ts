@@ -69,7 +69,7 @@ function productName(title?: string) {
   return parts.sort((a, b) => b.length - a.length)[0]?.slice(0, 60);
 }
 
-export interface Imported { blob: Blob; url: string; name?: string; brand?: string; price?: string; currency?: string }
+interface Imported { blob: Blob; url: string; name?: string; brand?: string; price?: string; currency?: string }
 
 /** Turn a link into a picture. Throws a message meant for the person. */
 export async function fromLink(input: string, signal?: AbortSignal): Promise<Imported> {

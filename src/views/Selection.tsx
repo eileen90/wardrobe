@@ -4,7 +4,7 @@ import { isKey } from '../lib/shortcuts';
 import { useStore } from '../lib/store';
 import { CATEGORIES } from '../lib/types';
 import { Icon } from '../ui';
-import type { CanvasAction } from './Canvas';
+import type { PieceAction } from '../lib/boards';
 
 /** The bar that takes the dock's place while pieces are selected, on every screen. */
 function SelectionBar({ n, total, onAll, onClear, panel, children }: {
@@ -74,7 +74,7 @@ export function ClosetSelection({ ids, total, onAll, onClear }: {
 
 /** On the looks page and saved looks: how the selected pieces lie. The same as their keys. */
 export function ArrangeSelection({ n, total, onAll, onClear, onAction, copy = false }: {
-  n: number; total: number; onAll: () => void; onClear: () => void; onAction: (a: CanvasAction) => void; copy?: boolean;
+  n: number; total: number; onAll: () => void; onClear: () => void; onAction: (a: PieceAction) => void; copy?: boolean;
 }) {
   return (
     <SelectionBar n={n} total={total} onAll={onAll} onClear={onClear}>

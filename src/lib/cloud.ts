@@ -15,7 +15,7 @@ export const cloudConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 /* ---------- status ---------- */
 
-export interface CloudStatus {
+interface CloudStatus {
   /** the saved sign-in has been read, so signed in or out is known */
   ready: boolean;
   email: string | null;
@@ -39,7 +39,6 @@ export function setCloud(p: Partial<CloudStatus>) {
   status = { ...status, ...p };
   subs.forEach((f) => f());
 }
-export const getCloud = () => status;
 export function useCloud() {
   return useSyncExternalStore((f) => (subs.add(f), () => void subs.delete(f)), () => status);
 }

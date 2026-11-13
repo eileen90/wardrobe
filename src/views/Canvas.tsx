@@ -10,13 +10,13 @@
  * the screen that owns the pieces decides what it means and records it in the history.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import type { PieceAction } from '../lib/boards';
 import { bounds, frame, toWorld, union, zoomAround, type Box, type Insets, type Rect, type View } from '../lib/canvas';
 import { arrowOf, covered, isKey, isPointer } from '../lib/shortcuts';
 import type { Item } from '../lib/types';
 import { Garment } from '../ui';
 
 export interface CanvasPiece { id: string; item: Item; box: Box; flip?: boolean }
-export type CanvasAction = 'remove' | 'forward' | 'backward' | 'flip' | 'duplicate';
 export interface CanvasApi {
   fit: (smooth?: boolean) => void;
   /** a world point on screen, relative to the canvas */
@@ -24,7 +24,7 @@ export interface CanvasApi {
   toWorld: (sx: number, sy: number) => { x: number; y: number };
   el: () => HTMLDivElement | null;
 }
-export interface HudState { hover: boolean; selected: boolean; lifted: boolean; /** some piece is under the pointer */ anyHover: boolean }
+interface HudState { hover: boolean; selected: boolean; lifted: boolean; /** some piece is under the pointer */ anyHover: boolean }
 
 const place = (b: Box) =>
   `translate3d(${(b.cx - b.w / 2).toFixed(2)}px, ${(b.cy - b.h / 2).toFixed(2)}px, 0) rotate(${b.rot.toFixed(2)}deg)`;
@@ -63,7 +63,7 @@ export function Canvas(props: {
   /** a piece is being carried: where it would be now (null when put down) */
   onDrag?: (ids: string[], dx: number, dy: number) => void;
   onResize: (ids: string[], k: number, keyed: boolean) => void;
-  onAction?: (a: CanvasAction, ids: string[]) => void;
+  onAction?: (a: PieceAction, ids: string[]) => void;
   /** world-space layers under and over the pieces */
   under?: ReactNode;
   over?: ReactNode;
@@ -420,7 +420,7 @@ export function Canvas(props: {
       }
       if (isKey(e, 'grow')) { e.preventDefault(); P.onResize(ids, 1.06, true); return; }
       if (isKey(e, 'shrink')) { e.preventDefault(); P.onResize(ids, 1 / 1.06, true); return; }
-      const acts: CanvasAction[] = ['remove', 'forward', 'backward', 'flip', 'duplicate'];
+      const acts: PieceAction[] = ['remove', 'forward', 'backward', 'flip', 'duplicate'];
       for (const a of acts) {
         if (isKey(e, a) && P.onAction) { e.preventDefault(); P.onAction(a, ids); return; }
       }

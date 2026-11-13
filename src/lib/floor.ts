@@ -30,7 +30,7 @@ const STEP = 6 * PX;
 const AISLE = 55 * PX;
 
 /** The floor, left to right, the way an outfit is put on; each cluster is a loose pile of one kind. */
-export const CLUSTERS: { id: string; name: string; cats: GroupId[]; width: number }[] = ([
+const CLUSTERS: { id: string; name: string; cats: GroupId[]; width: number }[] = ([
   { id: 'outer', name: 'jackets & coats', cats: ['outer'], width: 190 },
   { id: 'top', name: 'tops & dresses', cats: ['top', 'dress'], width: 250 },
   { id: 'bottom', name: 'bottoms', cats: ['bottom'], width: 170 },
@@ -42,14 +42,14 @@ export const CLUSTERS: { id: string; name: string; cats: GroupId[]; width: numbe
 export const clusterOf = (i: Item) => CLUSTERS.find((c) => c.cats.includes(groupOf(i)))!.id;
 
 /** Each cluster's stretch of floor, from x0 to x1 (world units). */
-export const LANES = (() => {
+const LANES = (() => {
   let x = 0;
   return CLUSTERS.map((c) => { const l = { id: c.id, x0: x, x1: x + c.width }; x += c.width + AISLE; return l; });
 })();
 const lane = (id: string) => LANES.find((l) => l.id === id)!;
 
-export type Pos = NonNullable<Item['pos']>;
-export interface FloorBox extends Box { id: string; cluster: string }
+type Pos = NonNullable<Item['pos']>;
+interface FloorBox extends Box { id: string; cluster: string }
 export interface FloorLayout {
   boxes: Map<string, FloorBox>;
   /** places worked out just now, to be kept */
@@ -58,7 +58,7 @@ export interface FloorLayout {
 }
 
 /** Size on the floor: true to scale, small things a little larger, times any resizing by hand. */
-export function sizeOn(i: Item) {
+function sizeOn(i: Item) {
   const d = drawn(realSize(i), PX);
   const s = i.pos?.s ?? 1;
   return { w: d.w * s, h: d.h * s };
@@ -181,7 +181,7 @@ export function orderOnFloor(layout: FloorLayout, items: Item[], id: string, cat
 }
 
 /** Lay a cluster out again in the given order: what reordering the rails does to the floor. */
-export function reflow(layout: FloorLayout, all: Item[], cluster: string, inOrder: Item[]): Map<string, Pos> {
+export function reflow(layout: FloorLayout, cluster: string, inOrder: Item[]): Map<string, Pos> {
   const moving = new Set(inOrder.map((i) => i.id));
   const boxes = new Map([...layout.boxes].filter(([id, b]) => !moving.has(id) && b.cluster !== cluster));
   const out = new Map<string, Pos>();
@@ -190,6 +190,5 @@ export function reflow(layout: FloorLayout, all: Item[], cluster: string, inOrde
     boxes.set(it.id, boxFor(it, at.x, at.y, cluster));
     out.set(it.id, posOf(it, at.x, at.y, cluster));
   }
-  void all;
   return out;
 }

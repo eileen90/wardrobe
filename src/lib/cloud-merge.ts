@@ -15,7 +15,7 @@ export interface RemoteRow<T> {
 }
 
 /** What to do with a record the account sent. */
-export type Verdict =
+type Verdict =
   | 'take' // the account's copy is newer: use it here
   | 'same' // both sides already hold this version
   | 'keep'; // this device's copy is newer: send it up

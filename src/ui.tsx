@@ -20,27 +20,25 @@ const PATHS: Record<string, string> = {
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   shuffle: 'M3 7h3.5c5 0 6 10 11 10H21M18 14l3 3-3 3M3 17h3.5c1.6 0 2.8-1 3.9-2.4M21 7h-3.5c-1.6 0-2.8 1-3.9 2.4M18 4l3 3-3 3',
   turn: 'M20 12a8 8 0 11-3-6.2M20 4v5h-5',
-  prev: 'M17 3 4 17l13 14',
-  next: 'M7 3l13 14L7 31',
   gear: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM9 14.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5z',
   out: 'M9 6h9v9M18 6L7 17',
   left: 'M14 6l-6 6 6 6',
   right: 'M10 6l6 6-6 6',
   bin: 'M5 7h14M10 7V4.5h4V7M7 7l1 12.5h8L17 7',
-  paste: 'M9 5H6v15h12V5h-3M9 3.5h6v3H9z',
   front: 'M4 10h10v10H4zM10 10V4h10v10h-6',
   behind: 'M10 4h10v10H10zM10 10H4v10h10v-6',
   flip: 'M12 3v18M9 7L4 12l5 5zM15 7l5 5-5 5',
   copy: 'M9 9h11v11H9zM15 9V4H4v11h5',
   fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5M9 9h6v6H9z',
   tidy: 'M4 7h16M4 12h16M4 17h10',
-  check: 'M5 12.5l4.5 4.5L19 7.5',
   looks: 'M4 4h11v15H4zM9 8v12h11V8h-3',
+  lock: 'M7.5 11V8a4.5 4.5 0 019 0v3M5.5 11h13v9.5h-13z',
+  unlock: 'M7.5 11V8a4.5 4.5 0 018.7-1.6M5.5 11h13v9.5h-13z',
 };
 
-export function Icon({ name, box = '0 0 24 24' }: { name: keyof typeof PATHS | string; box?: string }) {
+export function Icon({ name }: { name: keyof typeof PATHS }) {
   return (
-    <svg viewBox={box} fill="none" stroke="currentColor" strokeWidth={name === 'more' ? 2.4 : 1.5}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={name === 'more' ? 2.4 : 1.5}
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={PATHS[name]} />
     </svg>

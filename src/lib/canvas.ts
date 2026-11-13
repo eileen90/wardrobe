@@ -10,9 +10,9 @@ export interface View { z: number; x: number; y: number }
 export interface Rect { x0: number; y0: number; x1: number; y1: number }
 export interface Insets { top: number; right: number; bottom: number; left: number }
 
-export const MIN_Z = 0.08;
-export const MAX_Z = 4;
-export const clampZ = (z: number) => Math.min(MAX_Z, Math.max(MIN_Z, z));
+const MIN_Z = 0.08;
+const MAX_Z = 4;
+const clampZ = (z: number) => Math.min(MAX_Z, Math.max(MIN_Z, z));
 
 export function bounds(boxes: Iterable<Pick<Box, 'cx' | 'cy' | 'w' | 'h'>>): Rect | null {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

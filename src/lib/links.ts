@@ -37,6 +37,3 @@ export function brandFromSite(url: string): string {
   if (!name || MARKETS.test(name) || name.length < 2) return '';
   return name.split('-').filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 }
-
-/** True when a piece of text is just a web address. */
-export const looksLikeUrl = (t: string) => /^(https?:\/\/|www\.)\S+$/i.test(t.trim()) || /^[\w-]+(\.[\w-]+)+\/\S*$/.test(t.trim());
