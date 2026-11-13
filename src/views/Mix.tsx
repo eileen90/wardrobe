@@ -271,9 +271,9 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
           const midY = at.y + at.h / 2;
           return (
             <>
-              {n > 1 && <button className="hud__arrow" style={{ left: at.x - 34, top: midY - 18 }} aria-label={`Previous ${RAIL[r].label}`}
+              {n > 1 && <button className="hud__arrow" style={{ left: Math.max(4, at.x - 34), top: midY - 18 }} aria-label={`Previous ${RAIL[r].label}`}
                 onClick={() => { setCur(r); stepRail(r, -1); }}><Icon name="left" /></button>}
-              {n > 1 && <button className="hud__arrow" style={{ left: at.x + at.w - 2, top: midY - 18 }} aria-label={`Next ${RAIL[r].label}`}
+              {n > 1 && <button className="hud__arrow" style={{ left: Math.min(innerWidth - 40, at.x + at.w - 2), top: midY - 18 }} aria-label={`Next ${RAIL[r].label}`}
                 onClick={() => { setCur(r); stepRail(r, 1); }}><Icon name="right" /></button>}
               <span className="hud__bar" style={{ left: at.x + at.w / 2, top: Math.max(at.y - 8, top + 96) }}>
                 <button className="hud__btn" aria-label={`All ${RAIL[r].title}`} aria-pressed={picking === r} onClick={() => { setCur(r); setPicking(picking === r ? null : r); }}><Icon name="grid" /></button>
