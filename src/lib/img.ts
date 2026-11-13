@@ -67,3 +67,46 @@ export function b64ToBlob(b64: string, type = 'image/png') {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type });
 }
+
+/* ---------- opening whatever file comes in ---------- */
+
+/** HEIC / HEIF files start with an `ftyp` box naming one of these brands. */
+async function isHeic(file: Blob) {
+  if (/hei[cf]/i.test(file.type)) return true;
+  const head = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  const text = String.fromCharCode(...head);
+  return text.slice(4, 8) === 'ftyp' && /heic|heix|heim|heis|hevc|hevx|mif1|msf1|avci/.test(text.slice(8, 32));
+}
+
+/**
+ * Open a picture file of any kind the phone or computer might hand over. iPhone photos (HEIC)
+ * are opened natively where the browser can (Safari), and converted on the device elsewhere;
+ * the converter is only downloaded the first time one is needed.
+ */
+export async function openPicture(file: Blob): Promise<HTMLImageElement> {
+  try {
+    return await loadImage(file);
+  } catch (e) {
+    if (!(await isHeic(file))) throw e;
+  }
+  try {
+    const { heicTo } = await import('heic-to');
+    return await loadImage(await heicTo({ blob: file, type: 'image/jpeg', quality: 0.92 }));
+  } catch {
+    throw new Error("That iPhone photo couldn't be opened.");
+  }
+}
+
+/** True for anything that might be a picture, judged by type or file name. */
+export const mightBePicture = (f: Blob & { name?: string }) =>
+  f.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|avif|gif|bmp)$/i.test(f.name ?? '');
+
+/** A short fingerprint of a file's bytes. */
+export async function fingerprint(file: Blob): Promise<string> {
+  try {
+    const sum = await crypto.subtle.digest('SHA-1', await file.arrayBuffer());
+    return [...new Uint8Array(sum)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+  } catch {
+    return '';
+  }
+}

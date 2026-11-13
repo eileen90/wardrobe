@@ -21,6 +21,16 @@ const PATHS: Record<string, string> = {
   turn: 'M20 12a8 8 0 11-3-6.2M20 4v5h-5',
   prev: 'M17 3 4 17l13 14',
   next: 'M7 3l13 14L7 31',
+  gear: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM9 14.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5z',
+  out: 'M9 6h9v9M18 6L7 17',
+  left: 'M14 6l-6 6 6 6',
+  right: 'M10 6l6 6-6 6',
+  bin: 'M5 7h14M10 7V4.5h4V7M7 7l1 12.5h8L17 7',
+  paste: 'M9 5H6v15h12V5h-3M9 3.5h6v3H9z',
+  front: 'M4 10h10v10H4zM10 10V4h10v10h-6',
+  behind: 'M10 4h10v10H10zM10 10H4v10h10v-6',
+  flip: 'M12 3v18M9 7L4 12l5 5zM15 7l5 5-5 5',
+  copy: 'M9 9h11v11H9zM15 9V4H4v11h5',
 };
 
 export function Icon({ name, box = '0 0 24 24' }: { name: keyof typeof PATHS | string; box?: string }) {
@@ -60,7 +70,7 @@ export function Garment({ item, size = 'thumb', small }: { item: Item; size?: 't
           draggable={false} onAnimationEnd={() => setFresh(false)} />
       : null;
   }
-  const developing = item.state === 'queued' || item.state === 'working';
+  const developing = item.state === 'working';
   return (
     <div className={'print' + (developing ? ' is-developing' : '')}>
       {url && <img src={url} alt={item.name} draggable={false} />}
@@ -118,7 +128,20 @@ export function toast(text: string, action?: ToastState['action']) {
   toastTimer = setTimeout(() => {
     toastState = null;
     toastSubs.forEach((f) => f());
-  }, action ? 4200 : 2600);
+  }, action ? 6500 : 2400);
+}
+
+export function dismissToast() {
+  clearTimeout(toastTimer);
+  toastState = null;
+  toastSubs.forEach((f) => f());
+}
+/** True while a toast is up, so quieter notices can step aside. */
+export function useToasting() {
+  return useSyncExternalStore(
+    (f) => (toastSubs.add(f), () => void toastSubs.delete(f)),
+    () => !!toastState,
+  );
 }
 
 export function Toast() {
@@ -136,7 +159,7 @@ export function Toast() {
     <div className={'toast' + (t ? ' is-on' : '')} role="status" aria-live="polite">
       <span>{show?.text}</span>
       {show?.action && (
-        <button onClick={() => { show.action!.run(); toastState = null; toastSubs.forEach((f) => f()); }}>
+        <button onClick={() => { show.action!.run(); dismissToast(); }}>
           {show.action.label}
         </button>
       )}

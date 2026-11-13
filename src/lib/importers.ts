@@ -1,4 +1,6 @@
-/** Getting pictures in from the web: a pasted image, an image link, or a shop page. */
+/** Getting pictures in from the web: an image link or a shop page. */
+import { brandFromSite, cleanUrl } from './links';
+import { parsePrice } from './money';
 
 const IMG_PROXY = (u: string) => `https://wsrv.nl/?url=${encodeURIComponent(u)}&n=-1&output=png`;
 async function getImage(url: string): Promise<Blob | null> {
@@ -17,16 +19,18 @@ async function getImage(url: string): Promise<Blob | null> {
   return null;
 }
 
+interface Page { pic: string; title?: string; brand?: string; price?: string; currency?: string }
+
 /**
- * Ask a link-preview service for a page's main picture and title.
+ * Ask a link-preview service for a page's main picture, title and shop name.
  * Shops don't let other sites read their pages directly, so this has to go through a relay.
  */
-async function pictureFromPage(page: string): Promise<{ pic: string; title?: string } | null> {
+async function readPage(page: string): Promise<Page | null> {
   try {
     const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(page)}`);
     if (r.ok) {
       const d = (await r.json())?.data;
-      if (d?.image?.url) return { pic: d.image.url, title: d.title };
+      if (d?.image?.url) return { pic: d.image.url, title: d.title, brand: d.publisher };
     }
   } catch {
     /* try the next one */
@@ -37,8 +41,18 @@ async function pictureFromPage(page: string): Promise<{ pic: string; title?: str
     });
     if (r.ok) {
       const d = (await r.json())?.data;
-      const pic = d?.metadata?.['og:image'] ?? Object.values(d?.images ?? {})[0];
-      if (typeof pic === 'string') return { pic, title: d?.title };
+      const m = d?.metadata ?? {};
+      const pic = m['og:image'] ?? Object.values(d?.images ?? {})[0];
+      if (typeof pic === 'string') {
+        const amount = m['product:price:amount'] ?? m['og:price:amount'];
+        return {
+          pic,
+          title: m['og:title'] ?? d?.title,
+          brand: m['og:site_name'],
+          price: amount ? parsePrice(String(amount)).amount : undefined,
+          currency: m['product:price:currency'] ?? m['og:price:currency'],
+        };
+      }
     }
   } catch {
     /* nothing more to try */
@@ -49,52 +63,52 @@ async function pictureFromPage(page: string): Promise<{ pic: string; title?: str
 /** "Linen Shirt | Some Shop" → "Linen Shirt": keep the longest part of a page title. */
 function productName(title?: string) {
   if (!title) return undefined;
-  const parts = title.split(/\s[|\u2013\u2014-]\s/).map((p) => p.trim()).filter(Boolean);
+  const parts = title.split(/\s[|–—-]\s/).map((p) => p.trim()).filter(Boolean);
   return parts.sort((a, b) => b.length - a.length)[0]?.slice(0, 60);
 }
 
-export interface Imported { blob: Blob; url: string; name?: string }
+export interface Imported { blob: Blob; url: string; name?: string; brand?: string; price?: string; currency?: string }
 
-/** Turn a pasted link into a picture. Throws a message meant for the person. */
+/** Turn a link into a picture. Throws a message meant for the person. */
 export async function fromLink(input: string): Promise<Imported> {
-  let url: URL;
-  try {
-    url = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
-  } catch {
-    throw new Error("That doesn't look like a link.");
-  }
+  const href = cleanUrl(input);
+  if (!href) throw new Error("That doesn't look like a link.");
+  const url = new URL(href);
   if (/\.(jpe?g|png|webp|avif|gif)(\?|#|$)/i.test(url.pathname + url.search)) {
-    const b = await getImage(url.href);
-    if (b) return { blob: b, url: url.href };
+    const b = await getImage(href);
+    if (b) return { blob: b, url: href };
   }
   // A shop page: find its product picture.
-  const found = await pictureFromPage(url.href);
+  const found = await readPage(href);
   if (found) {
     const b = await getImage(found.pic);
-    if (b) return { blob: b, url: url.href, name: productName(found.title) };
-  }
-  // Last try: maybe it was an image after all.
-  const b = await getImage(url.href);
-  if (b) return { blob: b, url: url.href };
-  throw new Error("Couldn't get a picture from that link. Save the picture to your photos and add it from there.");
-}
-
-/** Whatever picture or link is on the clipboard. */
-export async function fromClipboard(): Promise<Imported | string | null> {
-  if (!navigator.clipboard?.read) {
-    const text = await navigator.clipboard?.readText?.();
-    return text?.trim() || null;
-  }
-  const entries = await navigator.clipboard.read();
-  for (const e of entries) {
-    const type = e.types.find((t) => t.startsWith('image/'));
-    if (type) return { blob: await e.getType(type), url: '' };
-  }
-  for (const e of entries) {
-    if (e.types.includes('text/plain')) {
-      const text = (await (await e.getType('text/plain')).text()).trim();
-      if (text) return text;
+    if (b) {
+      return {
+        blob: b, url: href, name: productName(found.title),
+        brand: found.brand?.trim() || brandFromSite(href), price: found.price, currency: found.currency,
+      };
     }
   }
-  return null;
+  // Last try: maybe it was an image after all.
+  const b = await getImage(href);
+  if (b) return { blob: b, url: href };
+  throw new Error("Couldn't get a picture from that link.");
+}
+
+/**
+ * What a paste or a drop carries: picture files, and failing that a link (a picture dragged
+ * out of another browser window arrives as its address, or as a scrap of HTML around it).
+ */
+export function readTransfer(dt: DataTransfer | null): { files: File[]; link: string | null } {
+  if (!dt) return { files: [], link: null };
+  const files = [...dt.files];
+  let link: string | null = null;
+  const html = dt.getData('text/html');
+  const src = html && /<img[^>]+src=["']([^"']+)["']/i.exec(html)?.[1];
+  if (src && /^https?:/i.test(src)) link = src.replace(/&amp;/g, '&');
+  if (!link) {
+    const text = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/\r?\n/).find((l) => l && !l.startsWith('#'))?.trim();
+    if (text && /^(https?:\/\/|www\.)\S+$/i.test(text)) link = text;
+  }
+  return { files, link };
 }

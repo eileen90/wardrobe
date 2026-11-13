@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { deleteLook } from '../lib/actions';
+import { placeFresh } from '../lib/boards';
 import { shareLook } from '../lib/exportBoard';
 import { getState, removeLook, saveLook, useStore } from '../lib/store';
-import { BOARD_RATIO, CATEGORIES, PAPERS, uid, type Category, type Look, type Placed } from '../lib/types';
+import { BOARD_RATIO, CATEGORIES, PAPERS, uid, type Category, type Item, type Look, type Placed } from '../lib/types';
 import { Garment, Icon, Sheet, toast } from '../ui';
-import { placeFresh } from './Looks';
+
+const typing = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(t.tagName);
 
 type Gesture =
   | { kind: 'drag'; pid: number; id: string; x: number; y: number; ox: number; oy: number; moved: boolean }
@@ -23,7 +26,6 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
   const [sel, setSel] = useState<string | null>(null);
   const [cat, setCat] = useState<Category | 'all'>('all');
   const [more, setMore] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [canUndo, setCanUndo] = useState(false);
   const mid = useRef<HTMLDivElement>(null);
@@ -34,6 +36,12 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<Gesture | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const tweaked = useRef(0);
+  const keys = useRef<(e: KeyboardEvent) => void>(() => {});
+  const wheel = useRef<(e: WheelEvent) => void>(() => {});
+  const pull = useRef<{ pid: number; x: number; y: number; out: boolean } | null>(null);
+  const pulled = useRef(false);
+  const [ghost, setGhost] = useState<{ item: Item; x: number; y: number } | null>(null);
 
   /* ----- saving ----- */
   const flush = () => {
@@ -72,10 +80,23 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
   const close = () => {
     flush();
     // A board nobody put anything on isn't worth keeping.
-    if (live.current && !live.current.pieces.length) void removeLook(live.current.id);
+    if (live.current && !live.current.pieces.length) removeLook(live.current.id);
     onClose();
   };
   useEffect(() => () => clearTimeout(saveTimer.current), []);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => keys.current(e);
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []);
+  const hasCanvas = size.w > 0;
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el) return;
+    const w = (e: WheelEvent) => wheel.current(e);
+    el.addEventListener('wheel', w, { passive: false });
+    return () => el.removeEventListener('wheel', w);
+  }, [hasCanvas]);
 
   /* ----- sizing the board to the space between the bars ----- */
   useLayoutEffect(() => {
@@ -197,12 +218,96 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
     const rest = look.pieces.filter((p) => p.id !== selected.id);
     change({ pieces: toFront ? [...rest, selected] : [selected, ...rest] }, true);
   };
-  const add = (itemId: string) => {
+  const add = (itemId: string, at?: { x: number; y: number }) => {
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
-    const p = placeFresh(item, look.pieces.length);
+    const p = placeFresh(item, look.pieces.length, at);
     change({ pieces: [...look.pieces, p] }, true);
     setSel(p.id);
+  };
+  const removeSel = () => {
+    if (!selected) return;
+    change({ pieces: look.pieces.filter((p) => p.id !== selected.id) }, true);
+    setSel(null);
+  };
+  const copySel = () => {
+    if (!selected) return;
+    const copy = { ...selected, id: uid(), x: Math.min(0.95, selected.x + 0.07), y: Math.min(0.95, selected.y + 0.05) };
+    change({ pieces: [...look.pieces, copy] }, true);
+    setSel(copy.id);
+  };
+  const flipSel = () => {
+    if (!selected) return;
+    remember();
+    setPiece(selected.id, { flip: !selected.flip });
+  };
+  /** Change the selected piece from the keyboard or the wheel; a burst of changes is one undo step. */
+  const tweak = (patch: (p: Placed) => Partial<Placed>) => {
+    const p = live.current?.pieces.find((x) => x.id === sel);
+    if (!p) return;
+    if (Date.now() - tweaked.current > 600) remember();
+    tweaked.current = Date.now();
+    setPiece(p.id, patch(p));
+  };
+  keys.current = (e) => {
+    if (typing(e.target)) {
+      if (e.key === 'Escape') (e.target as HTMLElement).blur();
+      return;
+    }
+    if (more) return;
+    const cmd = e.metaKey || e.ctrlKey;
+    const k = e.key;
+    if (cmd && k.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (cmd && k.toLowerCase() === 'd') { e.preventDefault(); copySel(); }
+    else if (cmd || e.altKey) return;
+    else if (k === 'Escape') { if (sel) setSel(null); else close(); }
+    else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); removeSel(); }
+    else if (k.startsWith('Arrow') && sel) {
+      e.preventDefault();
+      const d = e.shiftKey ? 0.05 : 0.01;
+      tweak((p) => ({
+        x: Math.min(1.1, Math.max(-0.1, p.x + (k === 'ArrowLeft' ? -d : k === 'ArrowRight' ? d : 0))),
+        y: Math.min(1.1, Math.max(-0.1, p.y + (k === 'ArrowUp' ? -d : k === 'ArrowDown' ? d : 0) * BOARD_RATIO)),
+      }));
+    }
+    else if (k === ']') reorder(true);
+    else if (k === '[') reorder(false);
+    else if (k === '+' || k === '=') tweak((p) => ({ w: Math.min(1.8, p.w * 1.05) }));
+    else if (k === '-') tweak((p) => ({ w: Math.max(0.08, p.w / 1.05) }));
+    else if (k.toLowerCase() === 'f') flipSel();
+  };
+  wheel.current = (e) => {
+    if (!sel) return;
+    e.preventDefault();
+    // Scroll (or pinch on a trackpad) resizes the selected piece; with shift it turns it.
+    if (e.shiftKey) tweak((p) => ({ rot: snap(p.rot + (e.deltaY || e.deltaX) * 0.2) }));
+    else tweak((p) => ({ w: Math.min(1.8, Math.max(0.08, p.w * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025)))) }));
+  };
+
+  /* ----- pulling a piece out of the drawer onto the board ----- */
+  const pullMove = (e: React.PointerEvent, item: Item) => {
+    const p = pull.current;
+    if (!p || p.pid !== e.pointerId) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    if (!p.out) {
+      const mouse = e.pointerType === 'mouse';
+      if (!(dy < -10 && Math.abs(dy) > Math.abs(dx)) && !(mouse && Math.hypot(dx, dy) > 8)) return;
+      p.out = true;
+      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* gone */ }
+    }
+    setGhost({ item, x: e.clientX, y: e.clientY });
+  };
+  const pullUp = (e: React.PointerEvent, item: Item) => {
+    const p = pull.current;
+    pull.current = null;
+    if (!p?.out) return;
+    setGhost(null);
+    pulled.current = true;
+    setTimeout(() => { pulled.current = false; }, 60);
+    const r = canvas.current?.getBoundingClientRect();
+    if (e.type === 'pointerup' && r && e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) {
+      add(item.id, { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height });
+    }
   };
 
   let handle: { x: number; y: number } | null = null;
@@ -235,7 +340,7 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
           const r = await shareLook(look, items);
           if (r === 'saved') toast('Picture saved');
         }}><Icon name="share" /></button>
-        <button className="iconbtn" onClick={() => { setConfirmDelete(false); setMore(true); }} aria-label="More"><Icon name="more" /></button>
+        <button className="iconbtn" onClick={() => setMore(true)} aria-label="More"><Icon name="more" /></button>
       </div>
 
       <div className="board__mid" ref={mid}>
@@ -264,7 +369,7 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
             )}
             {!look.pieces.length && (
               <div className="row__none" style={{ padding: 40, textAlign: 'center', pointerEvents: 'none' }}>
-                Tap a piece below to lay it on the board
+                Tap a piece below, or drag it up here
               </div>
             )}
           </div>
@@ -272,23 +377,14 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
       </div>
 
       <div className="board__tools">
-        {selected ? (
+        {selected && (
           <>
-            <button className="pill" onClick={() => reorder(true)}>to front</button>
-            <button className="pill" onClick={() => reorder(false)}>to back</button>
-            <button className="pill" onClick={() => { remember(); setPiece(selected.id, { flip: !selected.flip }); }}>flip</button>
-            <button className="pill" onClick={() => {
-              const copy = { ...selected, id: uid(), x: Math.min(0.95, selected.x + 0.07), y: Math.min(0.95, selected.y + 0.05) };
-              change({ pieces: [...look.pieces, copy] }, true);
-              setSel(copy.id);
-            }}>copy</button>
-            <button className="pill" onClick={() => {
-              change({ pieces: look.pieces.filter((p) => p.id !== selected.id) }, true);
-              setSel(null);
-            }}>remove</button>
+            <button className="pill" onClick={() => reorder(true)}><Icon name="front" />front</button>
+            <button className="pill" onClick={() => reorder(false)}><Icon name="behind" />back</button>
+            <button className="pill" onClick={flipSel}><Icon name="flip" />flip</button>
+            <button className="pill" onClick={copySel}><Icon name="copy" />copy</button>
+            <button className="pill" onClick={removeSel}><Icon name="bin" />remove</button>
           </>
-        ) : (
-          look.pieces.length > 0 && <span className="small muted" style={{ alignSelf: 'center' }}>Drag to move. Two fingers resize and turn.</span>
         )}
       </div>
 
@@ -301,7 +397,10 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
         </div>
         <div className="drawer__strip">
           {pool.map((i) => (
-            <button key={i.id} className="drawer__item" onClick={() => add(i.id)} aria-label={`Add ${i.name || 'piece'}`}>
+            <button key={i.id} className="drawer__item" aria-label={`Add ${i.name || 'piece'}`}
+              onClick={() => { if (!pulled.current) add(i.id); }}
+              onPointerDown={(e) => { if (e.button === 0) pull.current = { pid: e.pointerId, x: e.clientX, y: e.clientY, out: false }; }}
+              onPointerMove={(e) => pullMove(e, i)} onPointerUp={(e) => pullUp(e, i)} onPointerCancel={(e) => pullUp(e, i)}>
               <Garment item={i} small />
               {i.status === 'wish' && <span className="tag">wishlist</span>}
             </button>
@@ -319,11 +418,20 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
           ))}
         </div>
         <div className="rowbtns">
-          {confirmDelete
-            ? <button className="pill is-danger" onClick={() => { clearTimeout(saveTimer.current); void removeLook(look.id); toast('Look removed'); onClose(); }}>yes, delete this look</button>
-            : <button className="pill" onClick={() => setConfirmDelete(true)}>delete this look</button>}
+          <button className="pill" onClick={() => { clearTimeout(saveTimer.current); deleteLook(look.id); onClose(); }}>
+            <Icon name="bin" />delete this look
+          </button>
         </div>
       </Sheet>
+
+      {ghost && (() => {
+        const w = placeFresh(ghost.item).w * W, h = w / ghost.item.aspect;
+        return (
+          <div className="ghost" style={{ width: w, height: h, transform: `translate3d(${ghost.x - w / 2}px, ${ghost.y - h / 2}px, 0)` }}>
+            <Garment item={ghost.item} size="full" />
+          </div>
+        );
+      })()}
     </div>
   );
 }

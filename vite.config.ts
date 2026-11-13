@@ -25,7 +25,12 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: { globPatterns: ['**/*.{js,css,html,woff2,png,svg}'] },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,woff2,png,svg}'],
+        // The iPhone-photo converter is big and rarely needed: fetched on first use, then kept.
+        globIgnores: ['**/heic-to-*.js'],
+        runtimeCaching: [{ urlPattern: /heic-to-.*\.js$/, handler: 'CacheFirst', options: { cacheName: 'converters' } }],
+      },
     }),
   ],
   build: { target: 'es2020' },

@@ -1,6 +1,9 @@
+import { deleteLook } from '../lib/actions';
+import { newLook, placeFresh } from '../lib/boards';
 import { saveLook, useStore } from '../lib/store';
-import { BOARD_RATIO, uid, type Item, type Look, type Placed } from '../lib/types';
-import { Garment, Icon, Mark, Sheet } from '../ui';
+import { BOARD_RATIO, type Item, type Look } from '../lib/types';
+import { Garment, Icon, Sheet } from '../ui';
+import { Mix } from './Mix';
 
 /** A look drawn small: the same placements as the board, in percentages. */
 export function MiniBoard({ look, items }: { look: Look; items: Item[] }) {
@@ -26,20 +29,16 @@ export function MiniBoard({ look, items }: { look: Look; items: Item[] }) {
   );
 }
 
-export function newLook(n: number, pieces: Placed[] = []): Look {
-  return {
-    id: uid(), name: `Look ${String(n + 1).padStart(2, '0')}`, createdAt: Date.now(), updatedAt: Date.now(),
-    paper: '#ECECEC', pieces,
-  };
-}
-
-/** Drop a piece in the middle of a board at a sensible size. */
-export function placeFresh(item: Item, n = 0): Placed {
-  const w = Math.min(0.5, (0.42 * item.aspect) / BOARD_RATIO);
-  return { id: uid(), itemId: item.id, x: 0.5 + ((n % 3) - 1) * 0.06, y: 0.48 + ((n % 4) - 1.5) * 0.04, w, rot: 0, flip: false };
-}
-
-export function Looks({ onOpen }: { onOpen: (id: string) => void }) {
+/**
+ * Looks: one page for outfits. The mixer on top makes them, the saved ones sit right under it.
+ */
+export function Looks({ hidden, active, startWith, onOpen, onAdd }: {
+  hidden: boolean;
+  active: boolean;
+  startWith: string | null;
+  onOpen: (id: string) => void;
+  onAdd: () => void;
+}) {
   const looks = useStore((s) => s.looks);
   const items = useStore((s) => s.items);
 
@@ -49,34 +48,29 @@ export function Looks({ onOpen }: { onOpen: (id: string) => void }) {
     onOpen(l.id);
   };
 
-  if (!looks.length) {
-    return (
-      <div className="view">
-        <div className="empty">
-          <Mark className="mark" />
-          <p>No looks yet. Save one from mix, or lay pieces out on an empty board.</p>
-          <button className="go" onClick={create}><Icon name="plus" />Start a board</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="looks">
-      <div className="looks__grid">
-        {looks.map((l, i) => (
-          <button key={l.id} className="lookcard" style={{ ['--i' as string]: i }} onClick={() => onOpen(l.id)}>
-            <MiniBoard look={l} items={items} />
-            <span>
-              <span className="lookcard__name" style={{ display: 'block' }}>{l.name || 'Untitled'}</span>
-              <span className="small muted">{l.pieces.length} {l.pieces.length === 1 ? 'piece' : 'pieces'}</span>
-            </span>
+    <div className="looks" hidden={hidden}>
+      {/* The saved looks peek over the bottom edge, so it is plain there is more below. */}
+      <Mix startWith={startWith} active={active} tall={looks.length ? 'calc(100% - 78px)' : '100%'} onOpenLook={onOpen} onAdd={onAdd} />
+      <section className="saved">
+        <header className="saved__head">
+          <h2>Saved</h2>
+          <span className="small muted num">{looks.length}</span>
+        </header>
+        <div className="looks__grid">
+          {looks.map((l) => (
+            <button key={l.id} className="lookcard" onClick={() => onOpen(l.id)}
+              onKeyDown={(e) => { if (e.key === 'Delete' || e.key === 'Backspace') deleteLook(l.id); }}>
+              <MiniBoard look={l} items={items} />
+              <span className="lookcard__name">{l.name || 'Untitled'}</span>
+            </button>
+          ))}
+          <button className="lookcard is-new" onClick={create}>
+            <div className="lookcard__board"><Icon name="plus" /></div>
+            <span className="lookcard__name">Empty board</span>
           </button>
-        ))}
-      </div>
-      <div className="dock" style={{ position: 'fixed' }}>
-        <button className="go" onClick={create}><Icon name="plus" />New board</button>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -100,17 +94,15 @@ export function PickLook({ itemId, onClose, onOpen }: {
   return (
     <Sheet open={!!itemId} onClose={onClose} label="Add to a look">
       <div className="sheet__head"><h2>Add to a look</h2></div>
-      <div className="looks__grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px 10px' }}>
-        <button className="lookcard" onClick={() => void addTo(newLook(looks.length))}>
-          <div className="lookcard__board" style={{ display: 'grid', placeItems: 'center', boxShadow: 'none', border: '1px dashed #000' }}>
-            <span style={{ width: 22, height: 22 }}><Icon name="plus" /></span>
-          </div>
-          <span className="small">New board</span>
+      <div className="looks__grid is-tight">
+        <button className="lookcard is-new" onClick={() => void addTo(newLook(looks.length))}>
+          <div className="lookcard__board"><Icon name="plus" /></div>
+          <span className="lookcard__name">New board</span>
         </button>
         {looks.map((l) => (
           <button key={l.id} className="lookcard" onClick={() => void addTo(l)}>
             <MiniBoard look={l} items={items} />
-            <span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name || 'Untitled'}</span>
+            <span className="lookcard__name">{l.name || 'Untitled'}</span>
           </button>
         ))}
       </div>

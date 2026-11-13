@@ -2,29 +2,36 @@
  * The studio: turns whatever picture comes in into a clean, upright, evenly lit
  * cut-out, so every piece in the closet looks like it was shot the same way.
  *
- *   photo ──► plain backdrop already? ──yes──► cut out on the phone
+ *   photo ──► what is it? (words, else one small look)
+ *         ──► plain backdrop already? ──yes──► cut out on the device
  *                    │ no
  *                    ▼
- *        remake with the image model on a flat colour the garment doesn't contain
+ *        remake with the image model, in a frame shaped like the piece,
+ *        on a flat colour the piece doesn't contain
  *                    ▼
  *              cut out that colour ──► trim ──► save
+ *
+ * Nothing here needs watching. Pieces wait in a queue that survives closing the app, and
+ * when the studio can't be reached (no credits, too busy, offline) the queue simply pauses
+ * and picks itself up again.
  */
 import { useSyncExternalStore } from 'react';
 import * as db from './db';
 import { blobToDataUrl, flatJpeg, loadImage, makeCanvas, scaled, toBlob } from './img';
 import { cutOut, hasPlainBackdrop, hasTransparency, palette, rankBackdrops, trim } from './key';
-import { remake, StudioError } from './pollinations';
+import { kindFromShape } from './kind';
+import { balance, look, remake, StudioError, type StudioFault } from './pollinations';
 import { addItem, getItem, getState, refreshPics, updateItem } from './store';
-import type { Category, Item } from './types';
+import { costOf, type Category, type Item, type Length } from './types';
 import { uid } from './types';
 
 /* ---------- what to ask the model for ---------- */
 
 const NOUN: Record<Category, string> = {
-  outer: 'jacket',
+  outer: 'coat or jacket',
   top: 'top',
   dress: 'dress',
-  bottom: 'pair of trousers',
+  bottom: 'garment for the lower body',
   shoes: 'pair of shoes',
   bag: 'bag',
   extra: 'accessory',
@@ -33,18 +40,34 @@ const NOUN: Record<Category, string> = {
 const POSE: Record<Category, string> = {
   outer: 'Ghost mannequin flat lay, perfectly straight front view from directly above, symmetrical, closed, sleeves resting naturally at the sides.',
   top: 'Ghost mannequin flat lay, perfectly straight front view from directly above, symmetrical, sleeves resting naturally at the sides.',
-  dress: 'Ghost mannequin flat lay, perfectly straight front view from directly above, symmetrical, full length.',
-  bottom: 'Flat lay, perfectly straight front view from directly above, waistband at the top, legs straight and parallel, full length.',
+  dress: 'Ghost mannequin flat lay, perfectly straight front view from directly above, symmetrical.',
+  bottom: 'Flat lay, perfectly straight front view from directly above, waistband at the top, legs straight and parallel.',
   shoes: 'Both shoes of the pair side by side, three-quarter side view, toes pointing left, standing level.',
   bag: 'Standing upright, perfectly straight front view, strap and handles arranged neatly.',
   extra: 'Perfectly straight front view, neatly arranged.',
 };
 
-export function studioPrompt(category: Category, name: string, backdrop: string) {
-  const what = name.trim() ? `${name.trim()} (${NOUN[category]})` : NOUN[category];
+const HEM: Record<Length, string> = {
+  cropped: 'cropped',
+  hip: 'hip length',
+  thigh: 'thigh length',
+  knee: 'knee length',
+  calf: 'long, calf length',
+  ankle: 'very long, ankle length',
+};
+
+const WORN = (c: Category) => c === 'outer' || c === 'top' || c === 'dress' || c === 'bottom';
+
+export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length'>, backdrop: string) {
+  const worn = WORN(item.category);
+  const hem = worn && item.length ? `, ${HEM[item.length]}` : '';
+  const what = item.name.trim() ? `${item.name.trim()} (${NOUN[item.category]}${hem})` : `${NOUN[item.category]}${hem}`;
   return [
     `Recreate exactly this ${what} as a professional e-commerce product photo of the item alone.`,
-    POSE[category],
+    POSE[item.category],
+    worn
+      ? 'Keep its true proportions and its full length from top to hem exactly as in the photo: do not shorten, lengthen, crop or resize it.'
+      : 'Keep its true proportions exactly as in the photo.',
     'The whole item is visible and centred, with empty background margin on all four sides.',
     'Keep the exact same colour, fabric texture, pattern, logo, print and every detail.',
     'Smooth out wrinkles into soft natural fabric folds. Soft even neutral white studio lighting.',
@@ -53,16 +76,42 @@ export function studioPrompt(category: Category, name: string, backdrop: string)
   ].join(' ');
 }
 
+/**
+ * The frame the model draws in. A square frame is why long coats used to come back as
+ * hip-length jackets: the piece gets a frame shaped like itself instead.
+ */
+export function frameFor(item: Pick<Item, 'category' | 'length'>, photoAspect: number): [number, number] {
+  const TALL: [number, number] = [768, 1344], PORTRAIT: [number, number] = [896, 1152];
+  const SQUARE: [number, number] = [1024, 1024], WIDE: [number, number] = [1152, 896];
+  const long = item.length === 'knee' || item.length === 'calf' || item.length === 'ankle';
+  switch (item.category) {
+    case 'shoes': return WIDE;
+    case 'bag':
+    case 'extra': return photoAspect > 1.25 ? WIDE : photoAspect < 0.8 ? PORTRAIT : SQUARE;
+    case 'bottom': return !item.length || long ? TALL : PORTRAIT;
+    case 'dress': return !item.length || long ? TALL : PORTRAIT;
+    default:
+      if (long) return TALL;
+      if (item.length) return PORTRAIT;
+      return photoAspect < 0.68 ? TALL : PORTRAIT;
+  }
+}
+
 /* ---------- status for the UI ---------- */
 
 export interface StudioStatus {
   /** pieces waiting or in progress */
   left: number;
-  /** last problem, written for the person using the app */
-  notice: string | null;
-  noticeKind: StudioError['kind'] | null;
+  /** a piece is being worked on right now */
+  busy: boolean;
+  /** why the queue is paused, if it is */
+  hold: Exclude<StudioFault, 'fail'> | null;
+  /** links whose picture is still being fetched */
+  fetching: number;
+  /** last balance read from the account, when known */
+  credits: number | null;
 }
-let status: StudioStatus = { left: 0, notice: null, noticeKind: null };
+let status: StudioStatus = { left: 0, busy: false, hold: null, fetching: 0, credits: null };
 const subs = new Set<() => void>();
 function setStatus(p: Partial<StudioStatus>) {
   status = { ...status, ...p };
@@ -74,12 +123,12 @@ export function useStudio() {
     () => status,
   );
 }
-export const clearNotice = () => setStatus({ notice: null, noticeKind: null });
+export const fetching = (delta: number) => setStatus({ fetching: Math.max(0, status.fetching + delta) });
 
 /* ---------- saving pictures ---------- */
 
-const CUT_MAX = 1024;
-const THUMB_MAX = 420;
+const CUT_MAX = 1344;
+const THUMB_MAX = 640;
 
 async function saveCut(id: string, cut: HTMLCanvasElement) {
   const full = scaled(cut, CUT_MAX);
@@ -90,25 +139,24 @@ async function saveCut(id: string, cut: HTMLCanvasElement) {
 
 /* ---------- one piece ---------- */
 
-type Mode = 'auto' | 'remake';
+/** Pieces whose picture should be drawn again even though a cut-out could be made without. */
+const forced = new Set<string>();
 
-async function develop(id: string, mode: Mode): Promise<void> {
-  const item = getItem(id);
+async function develop(id: string): Promise<void> {
+  let item = getItem(id);
   const raw = await db.getBlob(`${id}:raw`);
   if (!item || !raw) return;
   await updateItem(id, { state: 'working', problem: undefined });
 
   const photo = scaled(await loadImage(raw), 1024);
+  const { key, model } = getState().settings;
   let cut: HTMLCanvasElement | null = null;
   let remade = false;
-  let problem: string | undefined;
 
-  const { key, model } = getState().settings;
-
-  // 1. A web picture that is already a cut-out, or already on a plain backdrop, is used
-  //    as it is. Your own photos always go to the model (when the studio is connected),
-  //    because a shirt on a white sheet is plain-backed but still crooked and creased.
-  if (mode === 'auto' || !key) {
+  // 1. A web picture that is already a cut-out, or already on a plain backdrop, is used as it
+  //    is: no credits spent. Your own photos go to the model (when there is a key), because a
+  //    shirt on a white sheet is plain-backed but still crooked and creased.
+  if ((item.from === 'web' && !forced.has(id)) || !key) {
     if (raw.type !== 'image/jpeg' && hasTransparency(photo)) {
       cut = trim(photo);
     } else {
@@ -121,22 +169,40 @@ async function develop(id: string, mode: Mode): Promise<void> {
     }
   }
 
-  // 2. Everything else is remade by the image model.
+  // 2. If words didn't say what this is, one small look does: kind, a name, how long it is.
+  //    A picture being redone gets the same look when its length was never measured, because
+  //    the length is what keeps a long coat long.
+  const again = forced.has(id) && WORN(item.category) && !item.length;
+  if (key && (!item.kindSure || again)) {
+    try {
+      const seen = await look(key, await blobToDataUrl(await flatJpeg(scaled(photo, 384), 0.72)));
+      if (seen) {
+        await updateItem(id, {
+          ...(item.kindSure ? {} : { category: seen.kind, kindSure: true }),
+          length: seen.length,
+          name: getItem(id)?.name || seen.name,
+        });
+      }
+    } catch (e) {
+      // A look that fails on its own is no reason to stop; anything that pauses the studio is.
+      if (!(e instanceof StudioError) || e.kind !== 'fail') throw e;
+    }
+    item = getItem(id);
+    if (!item) return;
+  }
+
+  // 3. Everything else is remade by the image model.
+  let problem: string | undefined;
   if (!cut) {
     if (!key) {
-      problem = 'Connect the studio in settings to clean this photo.';
+      problem = 'Add a studio key in settings and this photo is cleaned on its own.';
     } else {
       const dataUrl = await blobToDataUrl(await flatJpeg(photo, 0.9));
-      const backdrops = rankBackdrops(photo);
+      const size = frameFor(item, photo.width / photo.height);
       // A second backdrop is tried only if the first result cannot be cut out.
-      for (const b of backdrops.slice(0, 2)) {
-        const out = await remake({
-          key,
-          model,
-          photo: dataUrl,
-          prompt: studioPrompt(item.category, item.name, b.words),
-        });
-        const shot = scaled(await loadImage(out), 1024);
+      for (const b of rankBackdrops(photo).slice(0, 2)) {
+        const out = await remake({ key, model, photo: dataUrl, size, prompt: studioPrompt(item, b.words) });
+        const shot = scaled(await loadImage(out), CUT_MAX);
         const res = cutOut(shot);
         if (res) {
           cut = res.canvas;
@@ -144,103 +210,186 @@ async function develop(id: string, mode: Mode): Promise<void> {
           break;
         }
       }
-      if (!cut) problem = 'The studio could not separate this piece from its background. Try another photo.';
+      if (!cut) problem = "This photo couldn't be separated from its background. Another photo of it may work.";
     }
   }
 
   const cur = getItem(id);
-  if (!cur) return; // deleted meanwhile
-  if (cut) {
-    const full = await saveCut(id, cut);
-    refreshPics(id);
-    await updateItem(id, {
-      state: 'ready',
-      remade,
-      aspect: full.width / full.height,
-      colors: palette(full),
-      rev: cur.rev + 1,
-      problem: undefined,
-    });
-  } else {
+  if (!cur) return; // removed meanwhile
+  forced.delete(id);
+  if (!cut) {
     await updateItem(id, { state: 'raw', problem });
+    return;
   }
+  const full = await saveCut(id, cut);
+  refreshPics(id);
+  await updateItem(id, {
+    state: 'ready',
+    remade,
+    aspect: full.width / full.height,
+    colors: palette(full),
+    rev: cur.rev + 1,
+    problem: undefined,
+    // Last resort for the kind: the outline of the cut-out.
+    ...(cur.kindSure ? {} : { category: kindFromShape(full) }),
+  });
 }
 
 /* ---------- queue ---------- */
 
-const queue: { id: string; mode: Mode }[] = [];
+const queue: string[] = [];
+const tries = new Map<string, number>();
 let running = false;
+let timer: ReturnType<typeof setTimeout> | undefined;
+let waits = 0;
+let lastTry = 0;
 
 async function pump() {
-  if (running) return;
+  if (running || status.hold) return;
   running = true;
-  while (queue.length) {
-    setStatus({ left: queue.length });
-    const job = queue[0];
+  while (queue.length && !status.hold) {
+    const id = queue[0];
+    setStatus({ left: queue.length, busy: true });
+    lastTry = Date.now();
     try {
-      await develop(job.id, job.mode);
+      await develop(id);
+      waits = 0;
+      queue.shift();
     } catch (e) {
-      const err = e instanceof StudioError ? e : null;
-      console.error(e);
-      if (getItem(job.id)) {
-        await updateItem(job.id, {
-          state: 'raw',
-          problem: err?.message ?? 'Something went wrong while cleaning this photo.',
-        });
-      }
-      setStatus({
-        notice: err?.message ?? 'Something went wrong while cleaning a photo.',
-        noticeKind: err?.kind ?? 'retry',
-      });
-      // A bad key or an empty account fails every job: stop instead of burning through the queue.
-      if (err && err.kind !== 'retry') {
-        for (const rest of queue.splice(1)) {
-          if (getItem(rest.id)) await updateItem(rest.id, { state: 'raw', problem: err.message });
+      const err = e instanceof StudioError ? e : new StudioError('fail', '');
+      if (!(e instanceof StudioError)) console.error(e);
+      if (err.kind === 'fail') {
+        // One request going wrong is retried once, behind everything else, then left as a photo.
+        const n = (tries.get(id) ?? 0) + 1;
+        tries.set(id, n);
+        queue.shift();
+        if (!getItem(id)) continue;
+        if (n < 2) {
+          await updateItem(id, { state: 'queued' });
+          queue.push(id);
+        } else {
+          await updateItem(id, { state: 'raw', problem: "The studio couldn't clean this photo. Another photo of it may work." });
         }
+      } else {
+        // The studio itself is unavailable: everything stays queued and the queue waits.
+        if (getItem(id)) await updateItem(id, { state: 'queued' });
+        pause(err);
       }
     }
-    queue.shift();
   }
   running = false;
-  setStatus({ left: 0 });
+  setStatus({ left: queue.length, busy: false });
+  if (!queue.length) void readBalance();
 }
 
-function enqueue(id: string, mode: Mode) {
-  if (queue.some((q) => q.id === id)) return;
-  queue.push({ id, mode });
+function pause(err: StudioError) {
+  const kind = err.kind as Exclude<StudioFault, 'fail'>;
+  setStatus({ hold: kind });
+  clearTimeout(timer);
+  if (kind === 'busy') {
+    const secs = err.retryAfter ?? Math.min(300, 20 * 2 ** waits);
+    waits++;
+    timer = setTimeout(wake, secs * 1000);
+  } else if (kind === 'offline') {
+    timer = setTimeout(wake, 20_000);
+  } else if (kind === 'credits') {
+    void readBalance();
+    timer = setTimeout(checkCredits, 10 * 60_000);
+  }
+  // 'key': nothing to wait for; `keyChanged` wakes the queue.
+}
+
+/** Let the queue try again. If the reason for the pause still stands it simply pauses again. */
+function wake() {
+  clearTimeout(timer);
+  if (!status.hold) return void pump();
+  setStatus({ hold: null });
+  void pump();
+}
+
+async function readBalance() {
+  const { key } = getState().settings;
+  if (!key) return null;
+  const b = await balance(key);
+  if (typeof b === 'number') setStatus({ credits: b });
+  return b;
+}
+/** For the settings page: read the balance now. */
+export const refreshCredits = readBalance;
+
+/** While out of credits: look at the balance (free) and carry on as soon as it covers a photo. */
+async function checkCredits() {
+  if (status.hold !== 'credits') return;
+  clearTimeout(timer);
+  const b = await readBalance();
+  const enough = typeof b === 'number' && b >= costOf(getState().settings.model);
+  // When the balance can't be read with this key, a real attempt every half hour finds out.
+  if (enough || (typeof b !== 'number' && Date.now() - lastTry > 30 * 60_000)) return wake();
+  timer = setTimeout(checkCredits, 10 * 60_000);
+}
+
+/** Coming back to the app, or back online, is a good moment to try again. */
+function nudge() {
+  if (document.visibilityState === 'hidden') return;
+  if (status.hold === 'credits') void checkCredits();
+  else if (status.hold === 'offline' || (status.hold === 'busy' && Date.now() - lastTry > 60_000)) wake();
+}
+
+function enqueue(id: string) {
+  if (queue.includes(id)) return;
+  queue.push(id);
   setStatus({ left: queue.length });
   void pump();
 }
 
-/** Run a piece through the studio again. `remake` forces a fresh shot from the image model. */
-export async function redo(id: string, mode: Mode = 'remake') {
+/** Draw a piece's picture again from its photo. */
+export async function redo(id: string) {
+  forced.add(id);
+  tries.delete(id);
   await updateItem(id, { state: 'queued', problem: undefined });
-  enqueue(id, mode);
+  enqueue(id);
 }
 
+let started = false;
 /** Pick up pieces that were still waiting when the app was last closed. */
 export function resume() {
-  for (const i of getState().items) if (i.state === 'queued') enqueue(i.id, modeFor(i));
+  if (!started) {
+    started = true;
+    window.addEventListener('online', nudge);
+    window.addEventListener('focus', nudge);
+    document.addEventListener('visibilitychange', nudge);
+  }
+  const waiting = getState().items.filter((i) => i.state === 'queued').sort((a, b) => a.createdAt - b.createdAt);
+  for (const i of waiting) enqueue(i.id);
 }
 
-const modeFor = (i: Item): Mode => (i.from === 'web' ? 'auto' : 'remake');
-
-/** Send every piece that is still only a photo back through the studio. */
-export function retryRaw() {
-  for (const i of getState().items) if (i.state === 'raw') void redo(i.id, modeFor(i));
+/** After the key was set or changed: lift a pause and send every plain photo through. */
+export function keyChanged() {
+  setStatus({ credits: null });
+  for (const i of getState().items) {
+    if (i.state === 'raw') {
+      tries.delete(i.id);
+      void updateItem(i.id, { state: 'queued', problem: undefined }).then(() => enqueue(i.id));
+    }
+  }
+  if (status.hold === 'key' || status.hold === 'credits') wake();
+  void readBalance();
 }
 
 export interface NewPiece {
-  category: Category;
   status: Item['status'];
+  from: Item['from'];
+  category?: Category | null;
   name?: string;
   url?: string;
-  from: Item['from'];
+  brand?: string;
+  price?: string;
+  currency?: string;
+  hash?: string;
 }
 
 /** Store a new picture and queue it for the studio. Returns the new piece's id. */
-export async function addPicture(file: Blob, opts: NewPiece): Promise<string> {
-  const img = await loadImage(file);
+export async function addPicture(img: HTMLImageElement, file: Blob, opts: NewPiece): Promise<string> {
   const photo = scaled(img, 1600);
   const keepAlpha = file.type !== 'image/jpeg' && hasTransparency(photo);
   const id = uid();
@@ -248,10 +397,12 @@ export async function addPicture(file: Blob, opts: NewPiece): Promise<string> {
   const item: Item = {
     id,
     name: opts.name ?? '',
-    category: opts.category,
+    category: opts.category ?? 'top',
+    kindSure: !!opts.category,
     status: opts.status,
-    brand: '',
-    price: '',
+    brand: opts.brand ?? '',
+    price: opts.price ?? '',
+    currency: opts.currency || getState().settings.currency,
     url: opts.url ?? '',
     note: '',
     colors: [],
@@ -261,8 +412,12 @@ export async function addPicture(file: Blob, opts: NewPiece): Promise<string> {
     aspect: photo.width / photo.height,
     from: opts.from,
     rev: 0,
+    hash: opts.hash,
   };
   await addItem(item);
-  enqueue(id, modeFor(item));
+  enqueue(id);
   return id;
 }
+
+/** Try the queue again right now, whatever it was waiting for. */
+export const tryAgain = wake;

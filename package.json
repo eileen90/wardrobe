@@ -1,7 +1,7 @@
 {
   "name": "wardrobe",
   "private": true,
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
   "dependencies": {
     "@fontsource-variable/host-grotesk": "^5.3.0",
     "fflate": "^0.8.3",
+    "heic-to": "^1.6.7",
     "idb": "^8.0.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
