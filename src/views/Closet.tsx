@@ -6,7 +6,12 @@ import { CATEGORIES, catPlural, type Category, type Item } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, useViewport } from '../ui';
 
 interface Box { cx: number; cy: number; w: number; h: number; rot: number; z: number }
-interface Shelf { cat: Category; y: number; y1: number; n: number }
+/** Pieces whose kind is not known yet wait in their own rail, so they do not pose as tops. */
+type GroupId = Category | 'sorting';
+const unsorted = (i: Item) => i.kindSure === false && i.state !== 'ready';
+const groupOf = (i: Item): GroupId => (unsorted(i) ? 'sorting' : i.category);
+const groupName = (g: GroupId) => (g === 'sorting' ? 'sorting…' : catPlural(g));
+interface Shelf { cat: GroupId; y: number; y1: number; n: number }
 interface Layout {
   boxes: Map<string, Box>;
   W: number;
@@ -32,16 +37,16 @@ function seeded(id: string, salt: number) {
 /** Where a piece sits in its rail: wherever it was dragged, else newest first. */
 const rank = (i: Item) => i.order ?? -i.createdAt;
 
-function gridLayout(items: Item[], vw: number, top: number, keep?: Category): Layout {
+function gridLayout(items: Item[], vw: number, top: number, keep?: GroupId): Layout {
   const cols = vw < 520 ? 3 : vw < 900 ? 5 : vw < 1300 ? 7 : 9;
-  const pad = 14, gap = 6;
+  const pad = 20, gap = 6;
   const cell = (vw - pad * 2 - gap * (cols - 1)) / cols;
   const cellH = cell * 1.24;
   const boxes = new Map<string, Box>();
   const shelves: Shelf[] = [];
   let y = top;
-  for (const c of CATEGORIES) {
-    const group = items.filter((i) => i.category === c.id);
+  for (const c of [{ id: 'sorting' as GroupId }, ...CATEGORIES]) {
+    const group = items.filter((i) => groupOf(i) === c.id);
     // The rail a carried piece came from stays in place while it is in the air, even when
     // that leaves it empty, so nothing shifts under the pointer.
     if (!group.length && c.id !== keep) continue;
@@ -115,6 +120,31 @@ const place = (b: Box, s = 1) =>
   `translate3d(${(b.cx - b.w / 2).toFixed(1)}px, ${(b.cy - b.h / 2).toFixed(1)}px, 0) rotate(${b.rot.toFixed(2)}deg)` +
   (s === 1 ? '' : ` scale(${s.toFixed(4)})`);
 
+/**
+ * Where to scroll the scattered floor when it opens: the middle mark sits a little above centre,
+ * nudged so no piece lies half under the top bar or the bottom buttons.
+ */
+function calmHome(layout: Layout, vw: number, vh: number, topInset: number) {
+  const x = Math.max(0, (layout.mark?.x ?? 0) - vw / 2);
+  const base = Math.max(0, (layout.mark?.y ?? 0) - vh * 0.42);
+  const bottomBand = vh - 96;
+  let best = base, bestScore = Infinity;
+  for (let d = -400; d <= 400; d += 10) {
+    const y = Math.max(0, base + d);
+    let score = Math.abs(y - base) * 0.04;
+    for (const b of layout.boxes.values()) {
+      const t = b.cy - b.h / 2 - y, bt = b.cy + b.h / 2 - y;
+      if (bt <= 0 || t >= vh) continue;
+      score += 3 * Math.max(0, Math.min(bt, topInset) - Math.max(t, 0));
+      score += 3 * Math.max(0, Math.min(bt, vh) - Math.max(t, bottomBand));
+      // Pieces that sit fully clear of both bars are worth showing.
+      score -= 1.2 * Math.max(0, Math.min(bt, bottomBand) - Math.max(t, topInset));
+    }
+    if (score < bestScore - 0.5) { bestScore = score; best = y; }
+  }
+  return { x, y: best };
+}
+
 export interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
 
 /** A piece being carried: where the pointer is, and (lined up) the slot it would drop into. */
@@ -159,16 +189,16 @@ export function Closet({ onOpen, onAdd, hidden }: {
     const moving = shown.find((i) => i.id === target.id);
     if (!moving) return shown;
     const rest = shown.filter((i) => i.id !== target.id);
-    const group = rest.filter((i) => i.category === target.cat);
+    const group = rest.filter((i) => groupOf(i) === target.cat);
     const before = group[target.index];
     const at = before ? rest.indexOf(before) : group.length ? rest.indexOf(group[group.length - 1]) + 1 : rest.length;
     const out = [...rest];
-    out.splice(at, 0, { ...moving, category: target.cat });
+    out.splice(at, 0, { ...moving, category: target.cat, kindSure: true });
     return out;
   }, [shown, target]);
 
   const topInset = 52 + 44 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--top')) || 0);
-  const home = target ? items.find((i) => i.id === target.id)?.category : undefined;
+  const home = target ? (() => { const m = items.find((i) => i.id === target.id); return m && groupOf(m); })() : undefined;
   const layout = useMemo(
     () => (mode === 'grid' ? gridLayout(arranged, vw, topInset, home) : scatterLayout(arranged, vw, vh)),
     [mode, arranged, vw, vh, topInset, home],
@@ -199,7 +229,7 @@ export function Closet({ onOpen, onAdd, hidden }: {
     const p = prev.current;
     const home = mode === 'grid'
       ? { x: 0, y: 0 }
-      : { x: Math.max(0, (layout.mark?.x ?? 0) - vw / 2), y: Math.max(0, (layout.mark?.y ?? 0) - vh * 0.42) };
+      : calmHome(layout, vw, vh, topInset);
     if (!p || p.mode !== mode) {
       f.scrollTo(home.x, home.y);
       if (p && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -229,7 +259,7 @@ export function Closet({ onOpen, onAdd, hidden }: {
       f.scrollBy(layout.mark.x - p.mark.x, layout.mark.y - p.mark.y);
     }
     prev.current = { mode, boxes: layout.boxes, sx: f.scrollLeft, sy: f.scrollTop, mark: layout.mark };
-  }, [mode, layout, vw, vh]);
+  }, [mode, layout, vw, vh, topInset]);
 
   useEffect(() => {
     firstPaint.current = false;
@@ -264,12 +294,13 @@ export function Closet({ onOpen, onAdd, hidden }: {
     // Which rail, and which place in it, is under the piece.
     const L = live.current;
     const shelf = L.shelves.find((s) => cy >= s.y && cy < s.y1 + 26) ?? (cy < (L.shelves[0]?.y ?? 0) ? L.shelves[0] : L.shelves[L.shelves.length - 1]);
-    if (!shelf) return;
+    if (!shelf || shelf.cat === 'sorting') return;
+    const cat: Category = shelf.cat;
     const col = Math.min(L.cols - 1, Math.max(0, Math.floor((cx - L.pad + L.gap / 2) / (L.cell + L.gap))));
     const row = Math.max(0, Math.floor((cy - shelf.y - 44) / (L.cellH + L.gap)));
-    const others = shelf.n - (target?.cat === shelf.cat || (!target && items.find((i) => i.id === c.id)?.category === shelf.cat) ? 1 : 0);
+    const others = shelf.n - (target?.cat === shelf.cat || (!target && (() => { const m = items.find((i) => i.id === c.id); return !!m && groupOf(m) === shelf.cat; })()) ? 1 : 0);
     const index = Math.min(others, row * L.cols + col);
-    setTarget((t) => (t && t.id === c.id && t.cat === shelf.cat && t.index === index ? t : { id: c.id, cat: shelf.cat, index }));
+    setTarget((t) => (t && t.id === c.id && t.cat === cat && t.index === index ? t : { id: c.id, cat, index }));
   };
 
   /** Near the edge of the screen the floor keeps scrolling under a carried piece. */
@@ -337,11 +368,11 @@ export function Closet({ onOpen, onAdd, hidden }: {
     if (!cancelled && b && item) {
       if (mode === 'grid' && target) {
         // Its new place: between the neighbours it was dropped between.
-        const group = arranged.filter((i) => i.category === target.cat);
+        const group = arranged.filter((i) => groupOf(i) === target.cat);
         const at = group.findIndex((i) => i.id === c.id);
         const before = group[at - 1], after = group[at + 1];
         const order = before && after ? (rank(before) + rank(after)) / 2 : before ? rank(before) + 1 : after ? rank(after) - 1 : item.order;
-        const moved = target.cat !== item.category;
+        const moved = target.cat !== item.category || unsorted(item);
         editPiece(c.id, {
           order,
           ...(moved ? { category: target.cat, kindSure: true } : {}),
@@ -417,15 +448,15 @@ export function Closet({ onOpen, onAdd, hidden }: {
           {layout.mark && (
             <div className="wordmark" style={{ transform: `translate(-50%, -50%) translate(${layout.mark.x}px, ${layout.mark.y}px)` }}>
               <Mark />
-              <p>Everything you own,<br />laid out.</p>
+              {arranged.length < 4 && <p>Everything you own,<br />laid out.</p>}
             </div>
           )}
-          {CATEGORIES.map((c) => {
+          {[{ id: 'sorting' as GroupId }, ...CATEGORIES].map((c) => {
             const s = layout.shelves.find((x) => x.cat === c.id);
             if (!s) return null;
             return (
               <div className="shelf" key={c.id} style={{ transform: `translateY(${s.y}px)` }}>
-                <h2>{catPlural(c.id)}</h2>
+                <h2>{groupName(c.id)}</h2>
                 <span className="small muted num">{s.n}</span>
               </div>
             );
