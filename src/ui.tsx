@@ -31,6 +31,9 @@ const PATHS: Record<string, string> = {
   behind: 'M10 4h10v10H10zM10 10H4v10h10v-6',
   flip: 'M12 3v18M9 7L4 12l5 5zM15 7l5 5-5 5',
   copy: 'M9 9h11v11H9zM15 9V4H4v11h5',
+  fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5M9 9h6v6H9z',
+  tidy: 'M4 7h16M4 12h16M4 17h10',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
 };
 
 export function Icon({ name, box = '0 0 24 24' }: { name: keyof typeof PATHS | string; box?: string }) {

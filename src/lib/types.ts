@@ -33,6 +33,8 @@ export interface Item {
   category: Category;
   /** false while the kind is only the app's first guess and nothing has confirmed it */
   kindSure: boolean;
+  /** true when the owner chose the kind herself; a bulk redo never asks the studio to doubt it */
+  kindByHand?: boolean;
   length?: Length;
   status: 'owned' | 'wish';
   brand: string;

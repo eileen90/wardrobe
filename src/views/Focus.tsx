@@ -252,7 +252,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
           <div className="chips is-row">
             {CATEGORIES.map((c) => (
               <button key={c.id} className="pill" aria-pressed={item.category === c.id}
-                onClick={() => save({ category: c.id, kindSure: true }, `Moved to ${c.plural}`)}>{c.label}</button>
+                onClick={() => save({ category: c.id, kindSure: true, kindByHand: true }, `Moved to ${c.plural}`)}>{c.label}</button>
             ))}
           </div>
 

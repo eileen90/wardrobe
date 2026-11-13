@@ -1835,3 +1835,117 @@ label.way {
   opacity: 0.35;
 }
 /* ===== Account: end ===== */
+
+/* ===== Closet selection, zoom and clusters (src/views/Selection.tsx, Closet.tsx): start ===== */
+.sizer {
+  position: relative;
+}
+.floor.is-scatter {
+  touch-action: pan-x pan-y;
+}
+.piece {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.clabel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: calc(11px * var(--zi, 1));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.45;
+}
+.dock .round.is-quiet {
+  background: rgba(255, 255, 255, 0.34);
+  color: #111;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.piece__in::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 0 var(--blue);
+  background: rgba(10, 20, 255, 0);
+  transition: box-shadow 0.25s var(--ease), background 0.25s;
+  pointer-events: none;
+}
+.piece__in::after {
+  content: '';
+  position: absolute;
+  top: calc(-10px * var(--zi, 1));
+  right: calc(-10px * var(--zi, 1));
+  width: calc(20px * var(--zi, 1));
+  height: calc(20px * var(--zi, 1));
+  border-radius: 50%;
+  background: var(--blue) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 70% no-repeat;
+  transform: scale(0);
+  transition: transform 0.3s var(--spring);
+  pointer-events: none;
+}
+.piece.is-selected .piece__in::before {
+  box-shadow: 0 0 0 calc(1.5px * var(--zi, 1)) var(--blue);
+  background: rgba(10, 20, 255, 0.06);
+}
+.piece.is-selected .piece__in::after {
+  transform: scale(1);
+}
+.floor.is-selecting .piece {
+  cursor: pointer;
+}
+
+.selbar {
+  position: absolute;
+  z-index: 25;
+  left: 50%;
+  bottom: calc(var(--bottom) + 18px);
+  width: min(560px, calc(100% - 24px));
+  transform: translateX(-50%);
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 24px;
+  animation: selbar-in 0.5s var(--ease) backwards;
+}
+@keyframes selbar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 24px);
+  }
+}
+.selbar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.selbar__head b {
+  font-weight: 400;
+}
+.selbar__head span {
+  display: flex;
+  gap: 14px;
+}
+.selbar__acts,
+.selbar .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.selbar__panel.redo {
+  margin: 0;
+  background: rgba(255, 255, 255, 0.5);
+}
+.selbar__switch {
+  justify-self: start;
+}
+@media (prefers-reduced-motion: reduce) {
+  .selbar {
+    animation: none;
+  }
+}
+/* ===== Closet selection: end ===== */

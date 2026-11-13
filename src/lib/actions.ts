@@ -61,15 +61,76 @@ export async function keepLook(look: Look, label?: string) {
 /** Pictures as they were before a redo, so the redo can be taken back. */
 const beforeRedo = new Map<string, { item: Item; cut?: Blob; thumb?: Blob; how: RedoWith }>();
 
-/** Redraw a piece's picture; undo stops it, or puts the old picture back once it has finished. */
-export async function redoPiece(id: string, how: RedoWith = {}) {
+type Snap = { item: Item; cut?: Blob; thumb?: Blob; how: RedoWith };
+
+/** Remember the piece as it is, optionally make the studio doubt its kind, and send it in. */
+async function begin(id: string, how: RedoWith, recheckKind: boolean): Promise<Snap | null> {
   const item = getItem(id);
-  if (!item) return;
+  if (!item) return null;
   const [cut, thumb] = await Promise.all([db.getBlob(`${id}:cut`), db.getBlob(`${id}:thumb`)]);
   const snap = { item, cut, thumb, how };
   beforeRedo.set(id, snap);
+  // A kind the owner chose by hand is never put in doubt.
+  if (recheckKind && !item.kindByHand) await updateItem(id, { kindSure: false });
   await redo(id, how);
-  record('Redoing the picture', () => putBack(id, snap));
+  return snap;
+}
+
+/** Redraw a piece's picture; undo stops it, or puts the old picture back once it has finished. */
+export async function redoPiece(id: string, how: RedoWith = {}) {
+  const snap = await begin(id, how, false);
+  if (snap) record('Redoing the picture', () => putBack(id, snap));
+}
+
+/** Redraw many pictures at once: one undo step puts every old picture back. */
+export async function redoMany(ids: string[], how: RedoWith = {}, { recheckKind = false } = {}) {
+  const snaps: [string, Snap][] = [];
+  for (const id of ids) {
+    const snap = await begin(id, how, recheckKind);
+    if (snap) snaps.push([id, snap]);
+  }
+  if (!snaps.length) return;
+  record(`Redoing ${snaps.length} ${snaps.length === 1 ? 'picture' : 'pictures'}`, async () => {
+    for (const [id, snap] of snaps) await putBack(id, snap);
+  });
+}
+
+/** Take many pieces out of the closet; one undo brings them all back. */
+export function removeMany(ids: string[]) {
+  const undos: (() => void)[] = [];
+  for (const id of ids) {
+    if (!getItem(id)) continue;
+    cancel(id);
+    undos.push(removeItem(id));
+  }
+  if (!undos.length) return;
+  record(`Removed ${undos.length}`, () => {
+    undos.forEach((u) => u());
+    resume();
+  });
+}
+
+/** Change the same details on many pieces; one undo restores every old value. */
+export function editMany(ids: string[], patch: Partial<Item>, { label = 'Edit', toast = true } = {}) {
+  const befores: [string, Partial<Item>][] = [];
+  for (const id of ids) {
+    const cur = getItem(id);
+    if (!cur) continue;
+    const before: Partial<Item> = {};
+    let same = true;
+    for (const k of Object.keys(patch) as (keyof Item)[]) {
+      (before as Record<string, unknown>)[k] = cur[k];
+      if (JSON.stringify(cur[k]) !== JSON.stringify(patch[k])) same = false;
+    }
+    if (same) continue;
+    befores.push([id, before]);
+    void updateItem(id, patch);
+  }
+  if (!befores.length) return false;
+  record(label, async () => {
+    for (const [id, before] of befores) await updateItem(id, before);
+  }, { quiet: !toast });
+  return true;
 }
 
 async function putBack(id: string, snap: { item: Item; cut?: Blob; thumb?: Blob }) {
