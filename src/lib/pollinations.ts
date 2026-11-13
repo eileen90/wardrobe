@@ -101,6 +101,28 @@ export interface Seen { kind: Category; name: string; length?: Length }
 /** A small model that looks at a picture. One look costs well under a hundredth of a remake. */
 const EYES = 'openai/gpt-5.4-nano';
 
+/**
+ * What to ask. Home photos show clothes on wire hangers against a wall, or lying on a bed: a
+ * hanger's shoulders and a bag's strap on a hook look like a jacket's, so the kinds are told
+ * apart by what the piece has (sleeves, a neck opening, a closed body), not by how it hangs.
+ */
+const LOOK =
+  'This photo shows one piece of clothing or one accessory to be catalogued, photographed at home: it may hang on a ' +
+  'hanger or a hook against a wall, or lie on a bed or the floor. Ignore the hanger, the hook, the wall and the bed. ' +
+  'Reply with JSON only: {"kind": one of outer|top|dress|bottom|socks|shoes|bag|extra, ' +
+  '"name": a 2-4 word product name in English with its colour and type, ' +
+  '"length": where the hem falls when worn, or null for socks, shoes, bags and accessories}. ' +
+  'Length for tops, jackets and dresses: cropped (above the waist), hip, thigh, knee, calf or ankle. ' +
+  'Length for trousers, shorts and skirts: thigh (shorts, mini), knee, calf (cropped trousers, culottes, midi) or ankle (full length). ' +
+  'Kinds: bag = handbags, shoulder bags, crossbody bags, totes, backpacks, pouches, wallets: a closed body with handles or ' +
+  'a strap, and no neck opening and no sleeves (a backpack is a bag even when its straps look like sleeves). ' +
+  'outer = coats, jackets, blazers, waistcoats and vests, and cardigans: open all the way down the front and worn over another top. ' +
+  'top = shirts and blouses (even with a collar and buttons), T-shirts, sweaters and jumpers pulled over the head, knit tops, ' +
+  'tank tops, camisoles. dress = one piece from the shoulders past the hips, with or without sleeves. ' +
+  'bottom = trousers, jeans, leggings, shorts and skirts. socks = socks and stockings. ' +
+  'extra = scarves (a long strip or a flat square of fabric, with no neck opening and no sleeves), hats, belts, gloves, ' +
+  'sunglasses, watches, jewellery, ties.';
+
 /** Have a small vision model say what a photo shows: its kind, a short name, and how long it is. */
 export async function look(key: string, photo: string, signal?: AbortSignal): Promise<Seen | null> {
   const j = await post('/v1/chat/completions', key, {
@@ -110,16 +132,9 @@ export async function look(key: string, photo: string, signal?: AbortSignal): Pr
     messages: [{
       role: 'user',
       content: [
-        {
-          type: 'text',
-          text:
-            'This photo shows one piece of clothing or an accessory to be catalogued. Reply with JSON only: ' +
-            '{"kind": one of outer|top|dress|bottom|socks|shoes|bag|extra, ' +
-            '"name": a 2-4 word product name in English with its colour and type, ' +
-            '"length": where the hem falls when worn, one of cropped|hip|thigh|knee|calf|ankle, or null if it is not a garment}. ' +
-            'outer = coats, jackets, blazers and cardigans worn over a top. bottom = trousers, jeans, shorts and skirts. bag = handbags, backpacks, totes, wallets (a backpack is a bag even when its straps look like sleeves). socks = socks and stockings. extra = accessories: hats, scarves, belts, gloves, sunglasses, watches, jewellery, ties.',
-        },
-        { type: 'image_url', image_url: { url: photo, detail: 'low' } },
+        { type: 'text', text: LOOK },
+        // 'low' detail is a 512 px thumbnail; a strap and a sleeve need more than that.
+        { type: 'image_url', image_url: { url: photo, detail: 'high' } },
       ],
     }],
   }, signal);
