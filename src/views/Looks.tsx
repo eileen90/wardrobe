@@ -1,5 +1,5 @@
 import { deleteLook, keepLook } from '../lib/actions';
-import { newLook, placeFresh } from '../lib/boards';
+import { addPiece, newLook } from '../lib/boards';
 import { saveLook, useStore } from '../lib/store';
 import { BOARD_RATIO, type Item, type Look } from '../lib/types';
 import { Garment, Icon, Sheet } from '../ui';
@@ -87,7 +87,7 @@ export function PickLook({ itemId, onClose, onOpen }: {
 
   const addTo = async (look: Look) => {
     if (!item) return;
-    await keepLook({ ...look, pieces: [...look.pieces, placeFresh(item, look.pieces.length)] }, 'Added to the look');
+    await keepLook({ ...look, pieces: addPiece(look.pieces, items, item) }, 'Added to the look');
     onOpen(look.id);
   };
 

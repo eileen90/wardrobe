@@ -1835,3 +1835,322 @@ label.way {
   opacity: 0.35;
 }
 /* ===== Account: end ===== */
+
+/* ===== Looks: look builder (Mix slots, rail picker): start ===== */
+.mix .mix__lay {
+  width: min(calc(100% - 24px), 1040px);
+  transition: bottom 0.45s var(--ease);
+}
+.mix.is-picking .mix__lay {
+  bottom: 248px;
+}
+.slot {
+  position: absolute;
+  touch-action: pan-y;
+}
+.slot__g {
+  position: absolute;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.slot__g:active {
+  cursor: grabbing;
+}
+.slot .tag {
+  bottom: 4px;
+}
+/* The place being worked on: a quiet dashed frame. */
+.slot.is-sel::after,
+.slot.is-picking::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px dashed var(--blue);
+  border-radius: 14px;
+  pointer-events: none;
+}
+.slot__add {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 52px;
+  min-height: 44px;
+  border: 1px dashed rgba(0, 0, 0, 0.32);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 15px;
+  transition: color 0.2s, border-color 0.2s, transform 0.45s var(--spring);
+}
+.slot__add svg {
+  width: 14px;
+  height: 14px;
+}
+.slot__add:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.slot__add:active {
+  transform: translate(-50%, -50%) scale(0.95);
+}
+.slot__ctl {
+  position: absolute;
+  z-index: 4;
+  left: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.slot__name {
+  min-height: 26px;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.slot__name:hover {
+  color: var(--ink);
+}
+.slot__gap {
+  flex: 1;
+}
+.slot__btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--muted);
+  transition: color 0.2s, background-color 0.2s;
+}
+.slot__btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.6);
+}
+.slot__btn[aria-pressed='true'] {
+  color: #fff;
+  background: var(--ink);
+}
+.slot__btn svg {
+  width: 15px;
+  height: 15px;
+}
+.slot__kept {
+  position: absolute;
+  z-index: 3;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  transform: translateY(-80%);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.slot__kept svg {
+  width: 13px;
+  height: 13px;
+}
+.slot__arrow {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 48px;
+  margin-top: -24px;
+  border-radius: 12px;
+  color: var(--ink);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, background-color 0.2s;
+}
+.slot__arrow svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.35s var(--spring);
+}
+.slot__arrow:active svg {
+  transform: scale(0.8);
+}
+.slot__arrow.is-prev {
+  left: -10px;
+}
+.slot__arrow.is-next {
+  right: -10px;
+}
+@media (hover: hover) {
+  .slot:hover .slot__ctl,
+  .slot.is-sel .slot__ctl,
+  .slot.is-picking .slot__ctl,
+  .slot:hover .slot__arrow,
+  .slot.is-sel .slot__arrow,
+  .slot.is-picking .slot__arrow {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .slot:hover .slot__kept,
+  .slot.is-sel .slot__kept,
+  .slot.is-picking .slot__kept {
+    opacity: 0;
+  }
+  .slot__arrow:hover {
+    background: rgba(255, 255, 255, 0.55);
+  }
+}
+/* On touch, a piece is swiped; the arrows show on the place being worked on. */
+@media (hover: none) {
+  .slot__ctl {
+    display: none;
+  }
+  .slot.is-sel .slot__arrow,
+  .slot.is-picking .slot__arrow {
+    opacity: 0.8;
+    pointer-events: auto;
+  }
+  .slot__arrow.is-prev {
+    left: -6px;
+  }
+  .slot__arrow.is-next {
+    right: -6px;
+  }
+}
+
+/* Every piece of one rail, in a glass strip over the dock. */
+.pick {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  bottom: 84px;
+  width: min(calc(100% - 24px), 760px);
+  transform: translateX(-50%);
+  padding: 8px 8px 6px;
+  border-radius: 20px;
+  animation: pick-in 0.45s var(--ease) both;
+}
+@keyframes pick-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px);
+  }
+}
+.pick__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 0 8px;
+}
+.pick__title {
+  font-size: 17px;
+  line-height: 20px;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pick__count {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pick__gap {
+  flex: 1;
+}
+.pick .pill {
+  flex: none;
+  min-height: 30px;
+  padding: 0 11px;
+  gap: 6px;
+  font-size: 13px;
+  background: transparent;
+}
+.pick .pill[aria-pressed='true'] {
+  background: var(--ink);
+}
+.pick .pill svg {
+  width: 14px;
+  height: 14px;
+}
+.pick__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+.pick__close svg {
+  width: 16px;
+  height: 16px;
+}
+.pick__strip {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px 4px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.pick__strip::-webkit-scrollbar {
+  display: none;
+}
+.pick__item {
+  position: relative;
+  flex: none;
+  width: 84px;
+  height: 92px;
+  padding: 8px;
+  border-radius: 14px;
+  transition: background-color 0.2s, transform 0.45s var(--spring);
+}
+.pick__item:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+.pick__item:active {
+  transform: scale(0.94);
+}
+.pick__item[aria-current='true'] {
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 0 0 1.5px var(--blue);
+}
+.pick__item .tag {
+  bottom: 2px;
+  font-size: 10px;
+}
+@media (max-width: 520px) {
+  .mix.is-picking .mix__lay {
+    bottom: 236px;
+  }
+  .pick {
+    bottom: 80px;
+  }
+  .pick__item {
+    width: 70px;
+    height: 80px;
+    padding: 6px;
+  }
+  .pick .pill {
+    padding: 0 9px;
+  }
+  .pick__count {
+    display: none;
+  }
+}
+/* ===== Looks: look builder: end ===== */
