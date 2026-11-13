@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { deleteLook } from '../lib/actions';
-import { placeFresh } from '../lib/boards';
+import { addPiece, widthOn } from '../lib/boards';
 import { shareLook } from '../lib/exportBoard';
 import { getState, removeLook, saveLook, useStore } from '../lib/store';
 import { BOARD_RATIO, CATEGORIES, PAPERS, uid, type Category, type Item, type Look, type Placed } from '../lib/types';
@@ -221,9 +221,9 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
   const add = (itemId: string, at?: { x: number; y: number }) => {
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
-    const p = placeFresh(item, look.pieces.length, at);
-    change({ pieces: [...look.pieces, p] }, true);
-    setSel(p.id);
+    const pieces = addPiece(look.pieces, items, item, at);
+    change({ pieces }, true);
+    setSel(pieces[pieces.length - 1].id);
   };
   const removeSel = () => {
     if (!selected) return;
@@ -425,7 +425,7 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
       </Sheet>
 
       {ghost && (() => {
-        const w = placeFresh(ghost.item).w * W, h = w / ghost.item.aspect;
+        const w = widthOn(ghost.item, look.pieces, items) * W, h = w / ghost.item.aspect;
         return (
           <div className="ghost" style={{ width: w, height: h, transform: `translate3d(${ghost.x - w / 2}px, ${ghost.y - h / 2}px, 0)` }}>
             <Garment item={ghost.item} size="full" />

@@ -83,7 +83,7 @@ supabase.com wakes it.
 | --- | --- |
 | Anywhere | paste a picture or a link to add it |
 | A piece | ← → previous / next, Delete removes (with undo), Esc closes |
-| Mixer | ← → next outfit, ↑ ↓ pick one rail, Space shuffles, S saves |
+| Mixer | ↑ ↓ pick a rail, ← → change it (or everything not kept), L keep, ⌫ clear, Enter all pieces of that kind, Space shuffle, S save |
 | Board | Delete removes the selected piece, arrows nudge, ⌘Z undo, ⌘D copy, [ ] layer, + − size, F flip |
 
 ## Run it
