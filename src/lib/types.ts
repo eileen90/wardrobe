@@ -1,13 +1,15 @@
-export type Category = 'outer' | 'top' | 'dress' | 'bottom' | 'shoes' | 'bag' | 'extra';
+/** 'extra' is shown as "accessory"; the id stays for closets saved by earlier versions. */
+export type Category = 'outer' | 'top' | 'dress' | 'bottom' | 'socks' | 'shoes' | 'bag' | 'extra';
 
 export const CATEGORIES: { id: Category; label: string; plural: string }[] = [
   { id: 'outer', label: 'jacket', plural: 'jackets & coats' },
   { id: 'top', label: 'top', plural: 'tops' },
   { id: 'dress', label: 'dress', plural: 'dresses' },
   { id: 'bottom', label: 'bottom', plural: 'bottoms' },
+  { id: 'socks', label: 'socks', plural: 'socks' },
   { id: 'shoes', label: 'shoes', plural: 'shoes' },
   { id: 'bag', label: 'bag', plural: 'bags' },
-  { id: 'extra', label: 'extra', plural: 'extras' },
+  { id: 'extra', label: 'accessory', plural: 'accessories' },
 ];
 export const catLabel = (c: Category) => CATEGORIES.find((x) => x.id === c)!.label;
 export const catPlural = (c: Category) => CATEGORIES.find((x) => x.id === c)!.plural;
@@ -97,7 +99,10 @@ export interface Settings {
 export const MODELS = [
   { id: 'black-forest-labs/flux.2-klein-4b', label: 'Quick', hint: 'About 10 seconds a photo', cost: 0.005 },
   { id: 'black-forest-labs/flux.1-kontext-pro', label: 'Careful', hint: 'Closer on prints and logos, six times the credits', cost: 0.03 },
+  { id: 'microsoft/mai-image-2.6', label: 'Best', hint: 'Truest colours and prints, about 20 seconds, eight times the credits', cost: 0.04 },
 ];
+/** What a redo uses unless you pick another: usually something came out wrong, so the most faithful. */
+export const REDO_MODEL = 'microsoft/mai-image-2.6';
 export const costOf = (model: string) => MODELS.find((m) => m.id === model)?.cost ?? MODELS[0].cost;
 
 export const PAPERS = ['#ECECEC', '#FFFFFF', '#DAD7D0', '#C9D3DD', '#111111', '#0A14FF'];

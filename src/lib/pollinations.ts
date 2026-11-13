@@ -56,7 +56,8 @@ async function post(path: string, key: string, body: unknown, signal?: AbortSign
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(body),
     });
-  } catch {
+  } catch (e) {
+    if (signal?.aborted) throw e; // stopped on purpose, not a lost connection
     throw new StudioError('offline', 'No connection to the studio.');
   }
   if (!res.ok) await fail(res);
@@ -97,14 +98,14 @@ export async function remake(opts: {
 
 export interface Seen { kind: Category; name: string; length?: Length }
 
-/** The cheapest model that can look at a picture. One look costs about 1/250 of a remake. */
-const EYES = 'openai/gpt-5-nano';
+/** A small model that looks at a picture. One look costs well under a hundredth of a remake. */
+const EYES = 'openai/gpt-5.4-nano';
 
 /** Have a small vision model say what a photo shows: its kind, a short name, and how long it is. */
 export async function look(key: string, photo: string, signal?: AbortSignal): Promise<Seen | null> {
   const j = await post('/v1/chat/completions', key, {
     model: EYES,
-    reasoning_effort: 'minimal',
+    reasoning_effort: 'low',
     response_format: { type: 'json_object' },
     messages: [{
       role: 'user',
@@ -113,10 +114,10 @@ export async function look(key: string, photo: string, signal?: AbortSignal): Pr
           type: 'text',
           text:
             'This photo shows one piece of clothing or an accessory to be catalogued. Reply with JSON only: ' +
-            '{"kind": one of outer|top|dress|bottom|shoes|bag|extra, ' +
+            '{"kind": one of outer|top|dress|bottom|socks|shoes|bag|extra, ' +
             '"name": a 2-4 word product name in English with its colour and type, ' +
             '"length": where the hem falls when worn, one of cropped|hip|thigh|knee|calf|ankle, or null if it is not a garment}. ' +
-            'outer = coats, jackets, blazers and cardigans worn over a top. bottom = trousers, jeans, shorts and skirts. extra = hats, scarves, belts, jewellery.',
+            'outer = coats, jackets, blazers and cardigans worn over a top. bottom = trousers, jeans, shorts and skirts. bag = handbags, backpacks, totes, wallets (a backpack is a bag even when its straps look like sleeves). socks = socks and stockings. extra = accessories: hats, scarves, belts, gloves, sunglasses, watches, jewellery, ties.',
         },
         { type: 'image_url', image_url: { url: photo, detail: 'low' } },
       ],
@@ -135,6 +136,48 @@ export async function look(key: string, photo: string, signal?: AbortSignal): Pr
   } catch {
     return null;
   }
+}
+
+/** A model that compares two pictures closely; still well under a cent a look. */
+const JUDGE = 'openai/gpt-5.4-nano';
+
+/**
+ * Compare the original photo with the studio's last attempt and say what to fix: cut-off
+ * parts, wrong colours, wrong or missing prints and logos, wrong shape or length.
+ * Returns plain instructions for the image model, or '' when nothing stands out.
+ */
+export async function critique(key: string, photo: string, attempt: string, note: string, signal?: AbortSignal): Promise<string> {
+  const j = await post('/v1/chat/completions', key, {
+    model: JUDGE,
+    reasoning_effort: 'low',
+    max_completion_tokens: 1200,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text:
+            'Picture 1 is a photo of a piece of clothing or an accessory. Picture 2 is an attempt to redraw it as a clean ' +
+            'product photo on a flat backdrop; the backdrop colour does not matter. List what picture 2 gets wrong compared ' +
+            'with picture 1: parts cut off or missing (sleeves, hem, straps, toes), wrong colours or shades, prints, patterns, ' +
+            'logos or text that are wrong, blurred or missing, wrong shape, length or proportions, extra things added. ' +
+            (note ? `The owner says: "${note.slice(0, 300)}". ` : '') +
+            'Reply with at most four short imperative fixes for an image model, one per line, each naming the exact detail ' +
+            '(for example "Show both sleeves in full" or "Make the blue a deep navy, as in the photo"). Reply "none" if it is faithful.',
+        },
+        { type: 'image_url', image_url: { url: photo, detail: 'high' } },
+        { type: 'image_url', image_url: { url: attempt, detail: 'high' } },
+      ],
+    }],
+  }, signal);
+  const text: string = (j?.choices?.[0]?.message?.content ?? '').trim();
+  if (!text || /^none\.?$/i.test(text)) return '';
+  return text
+    .split(/\n+/)
+    .map((l) => l.replace(/^[\s\-*•\d.)]+/, '').trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .join(' ');
 }
 
 /** Remaining credits. `null` when it can't be read right now; 'bad' when the key is refused. */

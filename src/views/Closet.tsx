@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { drawn, realSize } from '../lib/kind';
-import { saveSettings, updateItem, useStore } from '../lib/store';
+import { editPiece } from '../lib/actions';
+import { saveSettings, useStore } from '../lib/store';
 import { CATEGORIES, catPlural, type Category, type Item } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, useViewport } from '../ui';
 
@@ -340,15 +341,16 @@ export function Closet({ onOpen, onAdd, hidden }: {
         const at = group.findIndex((i) => i.id === c.id);
         const before = group[at - 1], after = group[at + 1];
         const order = before && after ? (rank(before) + rank(after)) / 2 : before ? rank(before) + 1 : after ? rank(after) - 1 : item.order;
-        void updateItem(c.id, {
+        const moved = target.cat !== item.category;
+        editPiece(c.id, {
           order,
-          ...(target.cat !== item.category ? { category: target.cat, kindSure: true } : {}),
-        });
+          ...(moved ? { category: target.cat, kindSure: true } : {}),
+        }, moved ? { label: `Moved to ${catPlural(target.cat)}`, toast: true } : { label: 'Reordered' });
       } else if (mode !== 'grid' && L.mark) {
         const at = world(c.px, c.py);
-        void updateItem(c.id, {
+        editPiece(c.id, {
           spot: { x: (at.x + c.ox - L.mark.x) / L.cell, y: (at.y + c.oy - L.mark.y) / L.cell, t: Date.now() },
-        });
+        }, { label: 'Moved' });
       }
     }
     setTarget(null);

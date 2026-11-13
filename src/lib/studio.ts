@@ -20,9 +20,9 @@ import * as db from './db';
 import { blobToDataUrl, flatJpeg, loadImage, makeCanvas, scaled, toBlob } from './img';
 import { cutOut, hasPlainBackdrop, hasTransparency, palette, rankBackdrops, trim } from './key';
 import { kindFromShape } from './kind';
-import { balance, FREE_MODEL, look, remake, StudioError, type StudioFault } from './pollinations';
+import { balance, critique, FREE_MODEL, look, remake, StudioError, type StudioFault } from './pollinations';
 import { addItem, getItem, getState, refreshPics, updateItem } from './store';
-import { costOf, type Category, type Item, type Length } from './types';
+import { costOf, REDO_MODEL, type Category, type Item, type Length } from './types';
 import { uid } from './types';
 
 /* ---------- what to ask the model for ---------- */
@@ -32,6 +32,7 @@ const NOUN: Record<Category, string> = {
   top: 'top',
   dress: 'dress',
   bottom: 'garment for the lower body',
+  socks: 'pair of socks',
   shoes: 'pair of shoes',
   bag: 'bag',
   extra: 'accessory',
@@ -42,6 +43,7 @@ const POSE: Record<Category, string> = {
   top: 'Ghost mannequin flat lay, perfectly straight front view from directly above, symmetrical, sleeves resting naturally at the sides.',
   dress: 'Ghost mannequin flat lay, perfectly straight front view from directly above, symmetrical.',
   bottom: 'Flat lay, perfectly straight front view from directly above, waistband at the top, legs straight and parallel.',
+  socks: 'Both socks of the pair laid flat side by side, perfectly straight view from directly above, heels facing the same way, full length.',
   shoes: 'Both shoes of the pair side by side, three-quarter side view, toes pointing left, standing level.',
   bag: 'Standing upright, perfectly straight front view, strap and handles arranged neatly.',
   extra: 'Perfectly straight front view, neatly arranged.',
@@ -58,7 +60,9 @@ const HEM: Record<Length, string> = {
 
 const WORN = (c: Category) => c === 'outer' || c === 'top' || c === 'dress' || c === 'bottom';
 
-export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length'>, backdrop: string) {
+export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length' | 'kindSure'>, backdrop: string, fixes = '') {
+  // Unsure what it is: say nothing about sleeves or mannequins, or a backpack grows arms.
+  if (item.kindSure === false) return unsurePrompt(backdrop, fixes);
   const worn = WORN(item.category);
   const hem = worn && item.length ? `, ${HEM[item.length]}` : '';
   const what = item.name.trim() ? `${item.name.trim()} (${NOUN[item.category]}${hem})` : `${NOUN[item.category]}${hem}`;
@@ -68,12 +72,31 @@ export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length'>, b
     worn
       ? 'Keep its true proportions and its full length from top to hem exactly as in the photo: do not shorten, lengthen, crop or resize it.'
       : 'Keep its true proportions exactly as in the photo.',
-    'The whole item is visible and centred, with empty background margin on all four sides.',
+    'The whole item is visible and centred, with empty background margin on all four sides. Do not stretch or lengthen it to fill the frame: leave more empty background instead.',
+    KEEP_KIND,
     'Keep the exact same colour, fabric texture, pattern, logo, print and every detail.',
     'Smooth out wrinkles into soft natural fabric folds. Soft even neutral white studio lighting.',
     'No hanger, no person, no body parts, no other objects, no text, no watermark.',
     `The background is one flat solid ${backdrop} colour filling the whole frame edge to edge, perfectly uniform, no gradient, no shadow, no floor.`,
-  ].join(' ');
+    fixes && `A previous attempt got details wrong. Be sure to: ${fixes}`,
+  ].filter(Boolean).join(' ');
+}
+
+const KEEP_KIND =
+  'It stays exactly the same kind of object as in the photo. Never add sleeves, arms, hands, a body, a head, a mannequin or any part the item does not have.';
+
+function unsurePrompt(backdrop: string, fixes: string) {
+  return [
+    'Recreate exactly this item as a professional e-commerce product photo of the item alone, whatever kind of item it is.',
+    'Perfectly straight front view, laid out or standing the way such an item is usually photographed for a shop.',
+    'Keep its true shape, size and proportions exactly as in the photo.',
+    'The whole item is visible and centred, with empty background margin on all four sides. Do not stretch it to fill the frame.',
+    KEEP_KIND,
+    'Keep the exact same colour, fabric texture, pattern, logo, print and every detail. Soft even neutral white studio lighting.',
+    'No hanger, no person, no other objects, no text, no watermark.',
+    `The background is one flat solid ${backdrop} colour filling the whole frame edge to edge, perfectly uniform, no gradient, no shadow, no floor.`,
+    fixes && `A previous attempt got details wrong. Be sure to: ${fixes}`,
+  ].filter(Boolean).join(' ');
 }
 
 /**
@@ -86,14 +109,16 @@ export function frameFor(item: Pick<Item, 'category' | 'length'>, photoAspect: n
   const long = item.length === 'knee' || item.length === 'calf' || item.length === 'ankle';
   switch (item.category) {
     case 'shoes': return WIDE;
+    case 'socks': return photoAspect > 1.25 ? WIDE : PORTRAIT;
     case 'bag':
     case 'extra': return photoAspect > 1.25 ? WIDE : photoAspect < 0.8 ? PORTRAIT : SQUARE;
     case 'bottom': return !item.length || long ? TALL : PORTRAIT;
     case 'dress': return !item.length || long ? TALL : PORTRAIT;
     default:
       if (long) return TALL;
-      if (item.length) return PORTRAIT;
-      return photoAspect < 0.68 ? TALL : PORTRAIT;
+      // Unknown length: a tall frame invites the model to stretch a shirt into a tunic.
+      if (item.category === 'outer' && !item.length && photoAspect < 0.62) return TALL;
+      return PORTRAIT;
   }
 }
 
@@ -162,14 +187,21 @@ async function remakeWithBackup(opts: Parameters<typeof remake>[0]): Promise<Blo
 /** Pieces whose picture should be drawn again even though a cut-out could be made without. */
 const forced = new Set<string>();
 
-async function develop(id: string): Promise<void> {
+/** How a piece being redone should be drawn: which model, and what you said was wrong. */
+export interface RedoWith { model?: string; note?: string }
+const redoWith = new Map<string, RedoWith>();
+
+async function develop(id: string, signal: AbortSignal): Promise<void> {
   let item = getItem(id);
   const raw = await db.getBlob(`${id}:raw`);
   if (!item || !raw) return;
   await updateItem(id, { state: 'working', problem: undefined });
 
   const photo = scaled(await loadImage(raw), 1024);
-  const { key, model } = getState().settings;
+  const { key } = getState().settings;
+  const wish = forced.has(id) ? redoWith.get(id) : undefined;
+  // A redo is usually because something came out wrong, so it uses the most faithful model.
+  const model = wish ? wish.model ?? REDO_MODEL : getState().settings.model;
   let cut: HTMLCanvasElement | null = null;
   let remade = false;
 
@@ -195,7 +227,7 @@ async function develop(id: string): Promise<void> {
   const again = forced.has(id) && WORN(item.category) && !item.length;
   if (key && (!item.kindSure || again)) {
     try {
-      const seen = await look(key, await blobToDataUrl(await flatJpeg(scaled(photo, 384), 0.72)));
+      const seen = await look(key, await blobToDataUrl(await flatJpeg(scaled(photo, 384), 0.72)), signal);
       if (seen) {
         await updateItem(id, {
           ...(item.kindSure ? {} : { category: seen.kind, kindSure: true }),
@@ -220,9 +252,21 @@ async function develop(id: string): Promise<void> {
     } else {
       const dataUrl = await blobToDataUrl(await flatJpeg(photo, 0.9));
       const size = frameFor(item, photo.width / photo.height);
+      // Redoing a piece that already has a picture: look at what went wrong with it first.
+      let fixes = wish?.note?.trim() ?? '';
+      const before = wish && (await db.getBlob(`${id}:cut`));
+      if (before) {
+        try {
+          const seen = await critique(key, await blobToDataUrl(await flatJpeg(photo, 0.85)),
+            await blobToDataUrl(await flatJpeg(scaled(await loadImage(before), 1024), 0.85)), fixes, signal);
+          fixes = [fixes, seen].filter(Boolean).join('. ');
+        } catch (e) {
+          if (!(e instanceof StudioError) || (e.kind !== 'fail' && e.kind !== 'credits')) throw e;
+        }
+      }
       // A second backdrop is tried only if the first result cannot be cut out.
       for (const b of rankBackdrops(photo).slice(0, 2)) {
-        const out = await remakeWithBackup({ key, model, photo: dataUrl, size, prompt: studioPrompt(item, b.words) });
+        const out = await remakeWithBackup({ key, model, photo: dataUrl, size, signal, prompt: studioPrompt(item, b.words, fixes) });
         const shot = scaled(await loadImage(out), CUT_MAX);
         const res = cutOut(shot);
         if (res) {
@@ -236,8 +280,9 @@ async function develop(id: string): Promise<void> {
   }
 
   const cur = getItem(id);
-  if (!cur) return; // removed meanwhile
+  if (!cur || signal.aborted) return; // removed or stopped meanwhile
   forced.delete(id);
+  redoWith.delete(id);
   if (!cut) {
     await updateItem(id, { state: 'raw', problem });
     return;
@@ -264,6 +309,8 @@ let running = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let waits = 0;
 let lastTry = 0;
+/** The piece being worked on now, and the way to stop it. */
+let current: { id: string; stop: AbortController } | null = null;
 
 async function pump() {
   if (running || status.hold) return;
@@ -272,11 +319,14 @@ async function pump() {
     const id = queue[0];
     setStatus({ left: queue.length, busy: true });
     lastTry = Date.now();
+    const stop = new AbortController();
+    current = { id, stop };
     try {
-      await develop(id);
+      await develop(id, stop.signal);
       waits = 0;
-      queue.shift();
+      if (queue[0] === id) queue.shift();
     } catch (e) {
+      if (stop.signal.aborted) continue; // `cancel` already took it out of line
       const err = e instanceof StudioError ? e : new StudioError('fail', '');
       if (!(e instanceof StudioError)) console.error(e);
       if (err.kind === 'fail') {
@@ -303,6 +353,7 @@ async function pump() {
       }
     }
   }
+  current = null;
   running = false;
   setStatus({ left: queue.length, busy: false });
   if (!queue.length) void readBalance();
@@ -371,9 +422,23 @@ function enqueue(id: string) {
   void pump();
 }
 
-/** Draw a piece's picture again from its photo. */
-export async function redo(id: string) {
+/** Stop the studio working on a piece: out of the queue, and any request on its way is dropped. */
+export function cancel(id: string) {
+  const at = queue.indexOf(id);
+  if (at >= 0) queue.splice(at, 1);
+  forced.delete(id);
+  redoWith.delete(id);
+  if (current?.id === id) current.stop.abort();
+  setStatus({ left: queue.length });
+}
+
+/** Pieces waiting for the studio or being worked on, in order. */
+export const inLine = () => [...queue];
+
+/** Draw a piece's picture again from its photo, by default with the most faithful model. */
+export async function redo(id: string, how: RedoWith = {}) {
   forced.add(id);
+  redoWith.set(id, how);
   tries.delete(id);
   await updateItem(id, { state: 'queued', problem: undefined });
   enqueue(id);

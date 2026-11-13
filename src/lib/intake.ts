@@ -5,6 +5,7 @@
  *   your own picture → yours     a link to a shop → wishlist
  *   kind, name, brand and price are read from whatever came with it; the studio works out the rest.
  */
+import { added } from './actions';
 import { fromLink, readTransfer } from './importers';
 import { fingerprint, mightBePicture, openPicture } from './img';
 import { kindFromWords } from './kind';
@@ -12,6 +13,14 @@ import { getState } from './store';
 import { addPicture, fetching } from './studio';
 
 export interface Taken { added: number; twice: number; failed: number; message?: string }
+
+/** Links still being fetched, so they can be called off. */
+const pending = new Set<AbortController>();
+
+/** Stop getting any picture still on its way; nothing is added. */
+export function cancelFetching() {
+  for (const c of pending) c.abort();
+}
 
 const nothing = (): Taken => ({ added: 0, twice: 0, failed: 0 });
 
@@ -21,6 +30,7 @@ const wordsIn = (name: string | undefined) =>
 
 export async function takeFiles(files: (Blob & { name?: string })[]): Promise<Taken> {
   const out = nothing();
+  const ids: string[] = [];
   for (const file of files) {
     if (!mightBePicture(file)) { out.failed++; continue; }
     try {
@@ -30,39 +40,47 @@ export async function takeFiles(files: (Blob & { name?: string })[]): Promise<Ta
       // A file called "blue linen shirt.jpg" has named itself.
       const words = wordsIn(file.name).replace(/\s+/g, ' ').trim();
       const category = kindFromWords(words);
-      await addPicture(img, file, {
+      ids.push(await addPicture(img, file, {
         status: 'owned', from: 'photo', category, hash,
         name: category && words.length < 50 ? words[0].toUpperCase() + words.slice(1) : '',
-      });
+      }));
       out.added++;
     } catch (e) {
       out.failed++;
       out.message = e instanceof Error ? e.message : undefined;
     }
   }
+  added(ids);
   return out;
 }
 
 export async function takeLink(link: string): Promise<Taken> {
   const out = nothing();
+  const stop = new AbortController();
+  pending.add(stop);
   fetching(1);
   try {
-    const got = await fromLink(link);
+    const got = await fromLink(link, stop.signal);
+    if (stop.signal.aborted) return out;
     const hash = await fingerprint(got.blob);
     if (hash && getState().items.some((i) => i.hash === hash)) return { ...out, twice: 1 };
     const img = await openPicture(got.blob);
     // A bare picture address is just a picture; a page is something you could buy.
     const isPage = !!got.name;
-    await addPicture(img, got.blob, {
+    if (stop.signal.aborted) return out;
+    const id = await addPicture(img, got.blob, {
       status: isPage ? 'wish' : 'owned', from: 'web', url: isPage ? got.url : '',
       name: got.name, brand: got.brand, price: got.price, currency: got.currency,
       category: kindFromWords(got.name), hash,
     });
+    added([id]);
     out.added = 1;
   } catch (e) {
+    if (stop.signal.aborted) return out;
     out.failed = 1;
     out.message = e instanceof Error ? e.message : undefined;
   } finally {
+    pending.delete(stop);
     fetching(-1);
   }
   return out;

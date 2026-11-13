@@ -1721,3 +1721,8 @@ label.way {
 [hidden] {
   display: none !important;
 }
+
+/* ---------- redo the picture ---------- */
+.redo { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border-radius: 18px; background: rgba(0, 0, 0, 0.04); }
+.redo .note { margin: 0; }
+.redo .input { width: 100%; }

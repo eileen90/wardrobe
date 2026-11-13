@@ -1,4 +1,4 @@
-import { deleteLook } from '../lib/actions';
+import { deleteLook, keepLook } from '../lib/actions';
 import { newLook, placeFresh } from '../lib/boards';
 import { saveLook, useStore } from '../lib/store';
 import { BOARD_RATIO, type Item, type Look } from '../lib/types';
@@ -87,7 +87,7 @@ export function PickLook({ itemId, onClose, onOpen }: {
 
   const addTo = async (look: Look) => {
     if (!item) return;
-    await saveLook({ ...look, pieces: [...look.pieces, placeFresh(item, look.pieces.length)] });
+    await keepLook({ ...look, pieces: [...look.pieces, placeFresh(item, look.pieces.length)] }, 'Added to the look');
     onOpen(look.id);
   };
 

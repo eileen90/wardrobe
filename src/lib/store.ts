@@ -83,8 +83,8 @@ export async function updateItem(id: string, patch: Partial<Item>) {
   await db.putItem(next);
 }
 /**
- * Take a piece out of the closet. It disappears at once but is only really deleted a little
- * later, so the returned function can put it back exactly as it was.
+ * Take a piece out of the closet. It disappears at once but is only really deleted the next
+ * time the app opens, so the returned function can put it back exactly as it was until then.
  */
 export function removeItem(id: string): () => void {
   const item = getItem(id);
@@ -92,9 +92,7 @@ export function removeItem(id: string): () => void {
   const at = state.items.indexOf(item);
   set({ items: state.items.filter((i) => i.id !== id) });
   void db.putItem({ ...item, gone: Date.now() });
-  const timer = setTimeout(() => void purge(id), 8000);
   return () => {
-    clearTimeout(timer);
     if (getItem(id)) return;
     const items = [...state.items];
     // Whatever the studio was doing with it stopped when it was removed.

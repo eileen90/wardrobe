@@ -18,7 +18,8 @@ const WORDS: [Category, RegExp][] = [
   ['outer', /\b(coats?|jackets?|blazers?|parkas?|trench|puffers?|windbreakers?|anoraks?|cardigans?|gilets?|vests?|overcoats?|bombers?|raincoats?|outerwear|peacoats?|capes?|ponchos?|fleece)\b|外套|大衣|夾克|夹克|風衣|风衣|西裝外套|羽絨|羽绒|罩衫|背心外套|コート|ジャケット|アウター|カーディガン|코트|자켓|재킷/i],
   ['bottom', /\b(pants|trousers|jeans|denims?|shorts|skirts?|skorts?|leggings|joggers|sweatpants|chinos|slacks|culottes|cargos?|tights|bermudas?)\b|褲|裤|裙|パンツ|スカート|デニム|ジーンズ|바지|스커트|치마/i],
   ['top', /\b(t-?shirts?|tees?|shirts?|blouses?|tops?|sweaters?|jumpers?|hoodies?|sweatshirts?|pullovers?|knits?|polos?|tanks?|camis?|camisoles?|turtlenecks?|bodysuits?|henleys?|tunics?|crewnecks?|jerseys?)\b|上衣|襯衫|衬衫|毛衣|針織|针织|衛衣|卫衣|帽T|T恤|背心|シャツ|ニット|トップス|パーカー|セーター|티셔츠|셔츠|니트|후드/i],
-  ['extra', /\b(hats?|caps?|beanies?|scarf|scarves|belts?|gloves?|sunglasses|glasses|watch(es)?|necklaces?|earrings?|bracelets?|rings?|socks?|ties?|jewel+e?ry|headbands?|bandanas?)\b|帽|圍巾|围巾|皮帶|皮带|手套|眼鏡|眼镜|項鍊|项链|耳環|耳环|襪|袜|手錶|手表|帽子|マフラー|ベルト|모자|목도리/i],
+  ['socks', /\b(socks?|stockings?|hosiery|ankle socks|knee.?highs?)\b|襪|袜|靴下|ソックス|양말/i],
+  ['extra', /\b(hats?|caps?|beanies?|scarf|scarves|belts?|gloves?|sunglasses|glasses|watch(es)?|necklaces?|earrings?|bracelets?|rings?|ties?|jewel+e?ry|headbands?|bandanas?)\b|帽|圍巾|围巾|皮帶|皮带|手套|眼鏡|眼镜|項鍊|项链|耳環|耳环|手錶|手表|帽子|マフラー|ベルト|모자|목도리/i],
 ];
 
 /** A kind read from words, or null when they don't say. The word nearest the end wins ("shirt dress" is a dress). */
@@ -97,6 +98,7 @@ const BUILD: Record<Category, { w: number; min: number; max: number }> = {
   top: { w: 60, min: 42, max: 82 },
   dress: { w: 54, min: 76, max: 132 },
   bottom: { w: 44, min: 30, max: 106 },
+  socks: { w: 22, min: 16, max: 50 },
   shoes: { w: 40, min: 12, max: 44 },
   bag: { w: 36, min: 16, max: 48 },
   extra: { w: 26, min: 6, max: 40 },

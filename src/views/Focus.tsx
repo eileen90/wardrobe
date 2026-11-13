@@ -1,10 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { removePiece } from '../lib/actions';
+import { editPiece, redoPiece, removePiece, stopStudio } from '../lib/actions';
 import { brandFromSite, cleanUrl, siteOf } from '../lib/links';
 import { CURRENCIES, groupDigits, parsePrice, signOf } from '../lib/money';
-import { saveSettings, updateItem, useStore } from '../lib/store';
-import { redo } from '../lib/studio';
-import { CATEGORIES, type Item } from '../lib/types';
+import { saveSettings, useStore } from '../lib/store';
+import { CATEGORIES, costOf, MODELS, REDO_MODEL, type Item } from '../lib/types';
 import { Garment, Icon, toast } from '../ui';
 
 /** A text field that saves as you leave it, so typing never fights the store. */
@@ -30,7 +29,7 @@ function Price({ item }: { item: Item }) {
   const [choosing, setChoosing] = useState(false);
   useEffect(() => setV(groupDigits(item.price)), [item.price]);
   const setCurrency = (currency: string) => {
-    void updateItem(item.id, { currency });
+    editPiece(item.id, { currency }, { label: 'Currency' });
     void saveSettings({ currency });
     setChoosing(false);
   };
@@ -38,7 +37,7 @@ function Price({ item }: { item: Item }) {
     const p = parsePrice(v);
     setV(groupDigits(p.amount));
     if (p.amount !== item.price || (p.currency && p.currency !== item.currency)) {
-      void updateItem(item.id, { price: p.amount, currency: p.currency ?? item.currency });
+      editPiece(item.id, { price: p.amount, currency: p.currency ?? item.currency }, { label: 'Price' });
       if (p.currency) void saveSettings({ currency: p.currency });
     }
   };
@@ -73,14 +72,14 @@ function LinkField({ item }: { item: Item }) {
     const url = cleanUrl(text);
     if (!url) return toast("That doesn't look like a link");
     setV('');
-    void updateItem(item.id, { url, ...(item.brand ? {} : { brand: brandFromSite(url) }) });
+    editPiece(item.id, { url, ...(item.brand ? {} : { brand: brandFromSite(url) }) }, { label: 'Link' });
   };
   if (item.url) {
     return (
       <div className="linkchip">
         <a className="pill" href={item.url} target="_blank" rel="noreferrer">{siteOf(item.url)}<Icon name="out" /></a>
         <button className="iconbtn is-small" aria-label="Remove the link"
-          onClick={() => { void updateItem(item.id, { url: '' }); setTimeout(() => input.current?.focus(), 0); }}>
+          onClick={() => { editPiece(item.id, { url: '' }, { label: 'Link removed', toast: true }); setTimeout(() => input.current?.focus(), 0); }}>
           <Icon name="x" />
         </button>
       </div>
@@ -93,6 +92,38 @@ function LinkField({ item }: { item: Item }) {
       onPaste={(e) => { const t = e.clipboardData.getData('text'); if (cleanUrl(t)) { e.preventDefault(); commit(t); } }}
       onBlur={() => commit(v)}
       onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+  );
+}
+
+/**
+ * Redo the picture. It uses the most faithful model unless you pick another, compares the last
+ * attempt with the photo to find what went wrong, and takes your words into account if you add any.
+ */
+function Redo({ item, onClose }: { item: Item; onClose: () => void }) {
+  const [model, setModel] = useState(REDO_MODEL);
+  const [note, setNote] = useState('');
+  const go = () => {
+    void redoPiece(item.id, { model, note: note.trim() });
+    onClose();
+  };
+  return (
+    <div className="redo">
+      <div className="chips is-row" role="group" aria-label="Model">
+        {MODELS.map((m) => (
+          <button key={m.id} className="pill" aria-pressed={model === m.id} title={m.hint} onClick={() => setModel(m.id)}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <p className="note">{MODELS.find((m) => m.id === model)?.hint}. {costOf(model)} credits.
+        {item.state === 'ready' && ' It compares the last picture with your photo and fixes what it finds.'}</p>
+      <input className="input" value={note} placeholder="What's wrong? (optional, e.g. sleeves cut off)" aria-label="What's wrong"
+        enterKeyHint="go" onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && go()} />
+      <div className="slip__acts">
+        <button className="pill is-on" onClick={go}><Icon name="turn" />redo it</button>
+        <button className="pill" onClick={onClose}>not now</button>
+      </div>
+    </div>
   );
 }
 
@@ -112,6 +143,8 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
   const hasKey = useStore((s) => !!s.settings.key);
   const fig = useRef<HTMLDivElement>(null);
   const [leaving, setLeaving] = useState(false);
+  const [redoing, setRedoing] = useState(false);
+  useEffect(() => setRedoing(false), [id]);
   const turned = useRef(0);
   const first = useRef(true);
 
@@ -187,7 +220,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
   };
 
   if (!item) return null;
-  const save = (patch: Partial<Item>) => void updateItem(item.id, patch);
+  const save = (patch: Partial<Item>, label?: string) => editPiece(item.id, patch, label ? { label, toast: true } : {});
   const waiting = item.state === 'queued' || item.state === 'working';
 
   return (
@@ -219,7 +252,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
           <div className="chips is-row">
             {CATEGORIES.map((c) => (
               <button key={c.id} className="pill" aria-pressed={item.category === c.id}
-                onClick={() => save({ category: c.id, kindSure: true })}>{c.label}</button>
+                onClick={() => save({ category: c.id, kindSure: true }, `Moved to ${c.plural}`)}>{c.label}</button>
             ))}
           </div>
 
@@ -227,8 +260,8 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
             <div className="line">
               <span>It is</span>
               <div className="seg" role="group">
-                <button aria-pressed={item.status === 'owned'} onClick={() => save({ status: 'owned' })}>mine</button>
-                <button aria-pressed={item.status === 'wish'} onClick={() => save({ status: 'wish' })}>on my wishlist</button>
+                <button aria-pressed={item.status === 'owned'} onClick={() => save({ status: 'owned' }, 'Marked as mine')}>mine</button>
+                <button aria-pressed={item.status === 'wish'} onClick={() => save({ status: 'wish' }, 'On the wishlist')}>on my wishlist</button>
               </div>
             </div>
             <div className="line">
@@ -252,13 +285,17 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
           <div className="slip__acts">
             <button className="pill is-on" onClick={() => onAddToLook(item.id)}>add to a look</button>
             <button className="pill" disabled={item.state !== 'ready'} onClick={() => onMix(item.id)}>mix with it</button>
-            {hasKey && (
-              <button className="pill" disabled={waiting} onClick={() => void redo(item.id)}>
+            {hasKey && !waiting && !redoing && (
+              <button className="pill" onClick={() => setRedoing(true)}>
                 <Icon name="turn" />redo the picture
               </button>
             )}
+            {waiting && (
+              <button className="pill" onClick={() => void stopStudio([item.id])}><Icon name="x" />stop cleaning</button>
+            )}
             <button className="pill" onClick={remove}><Icon name="bin" />remove</button>
           </div>
+          {redoing && !waiting && <Redo item={item} onClose={() => setRedoing(false)} />}
         </div>
       </aside>
     </div>

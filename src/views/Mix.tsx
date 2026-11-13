@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { keepLook } from '../lib/actions';
 import { newLook } from '../lib/boards';
 import { drawn, realSize } from '../lib/kind';
-import { saveLook, useStore } from '../lib/store';
+import { useStore } from '../lib/store';
 import { BOARD_RATIO, uid, type Category, type Item, type Placed } from '../lib/types';
 import { Garment, Icon, Mark, toast } from '../ui';
 
@@ -10,8 +11,10 @@ const RAILS = [
   { id: 'outer', label: 'jacket', cats: ['outer'] as Category[], cm: 78 },
   { id: 'top', label: 'top', cats: ['top', 'dress'] as Category[], cm: 68 },
   { id: 'bottom', label: 'bottom', cats: ['bottom'] as Category[], cm: 96 },
+  { id: 'socks', label: 'socks', cats: ['socks'] as Category[], cm: 24 },
   { id: 'shoes', label: 'shoes', cats: ['shoes'] as Category[], cm: 30 },
-  { id: 'bag', label: 'bag', cats: ['bag', 'extra'] as Category[], cm: 40 },
+  { id: 'bag', label: 'bag', cats: ['bag'] as Category[], cm: 40 },
+  { id: 'extra', label: 'accessory', cats: ['extra'] as Category[], cm: 30 },
 ] as const;
 type RailId = (typeof RAILS)[number]['id'];
 
@@ -161,7 +164,7 @@ function Rail({ item, count, index, top, height, span, pxPerCm, label, selected,
 function arrange(picks: Partial<Record<RailId, Item>>): Placed[] {
   const size = (i: Item | undefined) => (i ? realSize(i) : { w: 0, h: 0 });
   const top = size(picks.top), bottom = size(picks.bottom), outer = size(picks.outer);
-  const shoes = size(picks.shoes), bag = size(picks.bag);
+  const shoes = size(picks.shoes), bag = size(picks.bag), socks = size(picks.socks), extra = size(picks.extra);
   const lap = picks.top && picks.bottom ? 5 : 0;
   const column = top.h + bottom.h - lap;
   const body = Math.max(top.w, bottom.w);
@@ -183,6 +186,9 @@ function arrange(picks: Partial<Record<RailId, Item>>): Placed[] {
   put(picks.top, top, cx, y0 + fy(top.h) / 2);
   put(picks.outer, outer, Math.max(fx(outer.w) / 2 + 0.03, cx - fx(body) / 2 - fx(outer.w) * 0.22), y0 + 0.01 + fy(outer.h) / 2);
   put(picks.shoes, shoes, Math.min(1 - fx(shoes.w) / 2 - 0.03, cx + fx(body) / 2 + fx(shoes.w) * 0.2), Math.min(0.97 - fy(shoes.h) / 2, y0 + fy(column) + fy(shoes.h) * 0.2));
+  // Socks lie just left of the shoes; an accessory sits up by the shoulder, opposite any coat.
+  put(picks.socks, socks, Math.max(fx(socks.w) / 2 + 0.03, cx - fx(socks.w) * 0.6), Math.min(0.97 - fy(socks.h) / 2, y0 + fy(column) + fy(socks.h) * 0.15));
+  put(picks.extra, extra, Math.min(1 - fx(extra.w) / 2 - 0.03, cx + fx(body) / 2 + fx(extra.w) * 0.3), y0 + fy(extra.h) / 2 + 0.02);
   put(picks.bag, bag, Math.max(fx(bag.w) / 2 + 0.04, cx - fx(body) / 2 - fx(bag.w) * 0.5), Math.min(0.95 - fy(bag.h) / 2, y0 + fy(column) * 0.78));
   return out;
 }
@@ -202,7 +208,7 @@ export function Mix({ startWith, active, tall, onOpenLook, onAdd }: {
   const nLooks = useStore((s) => s.looks.length);
   const [withWish, setWithWish] = useState(true);
   const [on, setOn] = useState<RailId[]>(['top', 'bottom', 'shoes']);
-  const [idx, setIdx] = useState<Record<RailId, number>>({ outer: 0, top: 0, bottom: 0, shoes: 0, bag: 0 });
+  const [idx, setIdx] = useState<Record<RailId, number>>({ outer: 0, top: 0, bottom: 0, socks: 0, shoes: 0, bag: 0, extra: 0 });
   const [sel, setSel] = useState<RailId | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -267,7 +273,7 @@ export function Mix({ startWith, active, tall, onOpenLook, onAdd }: {
     const pieces = arrange(picks);
     if (!pieces.length) return;
     const look = newLook(nLooks, pieces);
-    await saveLook(look);
+    await keepLook(look);
     toast('Saved', { label: 'Open', run: () => onOpenLook(look.id) });
   };
 

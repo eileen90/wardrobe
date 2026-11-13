@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { takeTransfer } from './lib/intake';
+import { stopStudio } from './lib/actions';
+import { undoLast, useLastStep } from './lib/history';
+import { cancelFetching, takeTransfer } from './lib/intake';
 import { load, useStore } from './lib/store';
 import { resume, tryAgain, useStudio } from './lib/studio';
 import { dismissToast, Icon, Toast, useToasting } from './ui';
@@ -21,6 +23,7 @@ export function App() {
   const nLooks = useStore((s) => s.looks.length);
   const studio = useStudio();
   const toasting = useToasting();
+  const lastStep = useLastStep();
 
   const [tab, setTab] = useState<Tab>('closet');
   const [focus, setFocus] = useState<{ id: string; from: DOMRect | null; sequence: string[] } | null>(null);
@@ -56,12 +59,22 @@ export function App() {
       e.preventDefault();
       void takeTransfer(e.dataTransfer).then(tell);
     };
+    // ⌘Z / Ctrl+Z takes back the last thing done, anywhere a board isn't open (boards keep their own).
+    const key = (e: KeyboardEvent) => {
+      if (typing(e.target) || e.defaultPrevented) return;
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !document.querySelector('.board')) {
+        e.preventDefault();
+        void undoLast();
+      }
+    };
+    window.addEventListener('keydown', key);
     window.addEventListener('paste', paste);
     window.addEventListener('dragenter', enter);
     window.addEventListener('dragleave', leave);
     window.addEventListener('dragover', over);
     window.addEventListener('drop', drop);
     return () => {
+      window.removeEventListener('keydown', key);
       window.removeEventListener('paste', paste);
       window.removeEventListener('dragenter', enter);
       window.removeEventListener('dragleave', leave);
@@ -82,8 +95,9 @@ export function App() {
     : studio.hold === 'credits' && n ? { text: `${plural(n, 'photo')} waiting for credits`, act: 'Top up', run: () => setTab('settings') }
     : studio.hold === 'offline' && n ? { text: `Offline. ${plural(n, 'photo')} will finish once you're back`, act: 'Retry', run: tryAgain }
     : studio.hold === 'busy' && n ? { text: `The studio is busy. ${plural(n, 'photo')} will finish shortly`, act: 'Retry', run: tryAgain }
-    : n ? { text: `Cleaning ${plural(n, 'photo')}`, act: '', run: () => {} }
-    : studio.fetching ? { text: 'Getting the picture', act: '', run: () => {} }
+    : studio.free && n ? { text: `Out of credits. Cleaning ${plural(n, 'photo')} with the free backup`, act: 'Top up', run: () => setTab('settings') }
+    : n ? { text: `Cleaning ${plural(n, 'photo')}`, act: 'Stop', run: () => void stopStudio() }
+    : studio.fetching ? { text: 'Getting the picture', act: 'Cancel', run: cancelFetching }
     : null;
   const held = !!studio.hold && n > 0;
 
@@ -96,6 +110,11 @@ export function App() {
         <button aria-current={tab === 'looks' ? 'page' : undefined} onClick={() => setTab('looks')}>
           looks{nLooks > 0 && <sup>{nLooks}</sup>}
         </button>
+        {lastStep && (
+          <button className="nav__icon" aria-label={`Undo: ${lastStep}`} title={`Undo: ${lastStep}`} onClick={() => void undoLast()}>
+            <Icon name="undo" />
+          </button>
+        )}
         <button className="nav__icon" aria-label="Settings" aria-current={tab === 'settings' ? 'page' : undefined}
           onClick={() => setTab('settings')}><Icon name="gear" /></button>
       </nav>

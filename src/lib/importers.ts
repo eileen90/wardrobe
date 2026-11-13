@@ -3,16 +3,17 @@ import { brandFromSite, cleanUrl } from './links';
 import { parsePrice } from './money';
 
 const IMG_PROXY = (u: string) => `https://wsrv.nl/?url=${encodeURIComponent(u)}&n=-1&output=png`;
-async function getImage(url: string): Promise<Blob | null> {
+async function getImage(url: string, signal?: AbortSignal): Promise<Blob | null> {
   // Straight from the site first (works when it allows other sites to read it),
   // then through an image relay that does.
   for (const u of [url, IMG_PROXY(url)]) {
     try {
-      const r = await fetch(u, { referrerPolicy: 'no-referrer' });
+      const r = await fetch(u, { referrerPolicy: 'no-referrer', signal });
       if (!r.ok) continue;
       const b = await r.blob();
       if (b.type.startsWith('image/') && b.size > 800) return b;
     } catch {
+      if (signal?.aborted) return null;
       /* try the next way */
     }
   }
@@ -25,9 +26,9 @@ interface Page { pic: string; title?: string; brand?: string; price?: string; cu
  * Ask a link-preview service for a page's main picture, title and shop name.
  * Shops don't let other sites read their pages directly, so this has to go through a relay.
  */
-async function readPage(page: string): Promise<Page | null> {
+async function readPage(page: string, signal?: AbortSignal): Promise<Page | null> {
   try {
-    const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(page)}`);
+    const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(page)}`, { signal });
     if (r.ok) {
       const d = (await r.json())?.data;
       if (d?.image?.url) return { pic: d.image.url, title: d.title, brand: d.publisher };
@@ -37,6 +38,7 @@ async function readPage(page: string): Promise<Page | null> {
   }
   try {
     const r = await fetch(`https://r.jina.ai/${page}`, {
+      signal,
       headers: { Accept: 'application/json', 'X-With-Images-Summary': 'true' },
     });
     if (r.ok) {
@@ -70,18 +72,18 @@ function productName(title?: string) {
 export interface Imported { blob: Blob; url: string; name?: string; brand?: string; price?: string; currency?: string }
 
 /** Turn a link into a picture. Throws a message meant for the person. */
-export async function fromLink(input: string): Promise<Imported> {
+export async function fromLink(input: string, signal?: AbortSignal): Promise<Imported> {
   const href = cleanUrl(input);
   if (!href) throw new Error("That doesn't look like a link.");
   const url = new URL(href);
   if (/\.(jpe?g|png|webp|avif|gif)(\?|#|$)/i.test(url.pathname + url.search)) {
-    const b = await getImage(href);
+    const b = await getImage(href, signal);
     if (b) return { blob: b, url: href };
   }
   // A shop page: find its product picture.
-  const found = await readPage(href);
+  const found = signal?.aborted ? null : await readPage(href, signal);
   if (found) {
-    const b = await getImage(found.pic);
+    const b = await getImage(found.pic, signal);
     if (b) {
       return {
         blob: b, url: href, name: productName(found.title),
@@ -90,7 +92,7 @@ export async function fromLink(input: string): Promise<Imported> {
     }
   }
   // Last try: maybe it was an image after all.
-  const b = await getImage(href);
+  const b = signal?.aborted ? null : await getImage(href, signal);
   if (b) return { blob: b, url: href };
   throw new Error("Couldn't get a picture from that link.");
 }
