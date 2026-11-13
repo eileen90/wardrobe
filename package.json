@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@fontsource-variable/host-grotesk": "^5.3.0",
+    "@supabase/supabase-js": "2.118.0",
     "fflate": "^0.8.3",
     "heic-to": "^1.6.7",
     "idb": "^8.0.4",

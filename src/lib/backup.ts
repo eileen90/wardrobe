@@ -1,5 +1,6 @@
 /** One file holding the whole closet: pieces, looks and every picture. */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { restored } from './cloud';
 import * as db from './db';
 import { getState, load } from './store';
 import type { Item, Look } from './types';
@@ -31,6 +32,8 @@ export async function restoreBackup(file: Blob): Promise<number> {
   const meta = files['wardrobe.json'];
   if (!meta) throw new Error("That file isn't a Wardrobe backup.");
   const data = JSON.parse(strFromU8(meta)) as { items: Item[]; looks: Look[] };
+  // What was here before, so the account learns that it was replaced.
+  const [oldItems, oldLooks, oldBlobs] = await Promise.all([db.allItems(), db.allLooks(), db.allBlobKeys()]);
   await db.wipe();
   for (const [path, bytes] of Object.entries(files)) {
     const m = path.match(/^pictures\/(.+)\.(raw|cut|thumb)\.(jpg|png)$/);
@@ -39,6 +42,11 @@ export async function restoreBackup(file: Blob): Promise<number> {
   }
   for (const i of data.items ?? []) await db.putItem(i);
   for (const l of data.looks ?? []) await db.putLook(l);
+  restored(
+    [...oldItems, ...(data.items ?? [])].map((i) => i.id),
+    [...oldLooks, ...(data.looks ?? [])].map((l) => l.id),
+    oldBlobs,
+  );
   await load();
   return data.items?.length ?? 0;
 }

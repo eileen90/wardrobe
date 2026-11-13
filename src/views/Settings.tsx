@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { download, makeBackup, restoreBackup } from '../lib/backup';
+import { useCloud } from '../lib/cloud';
 import { TOP_UP_URL } from '../lib/pollinations';
 import { saveSettings, useStore } from '../lib/store';
 import { keyChanged, refreshCredits, resume, tryAgain, useStudio } from '../lib/studio';
 import { costOf, MODELS } from '../lib/types';
 import { toast } from '../ui';
+import { Account, ResetPassword } from './Account';
 
 export function Settings({ hidden }: { hidden: boolean }) {
   const settings = useStore((s) => s.settings);
   const items = useStore((s) => s.items);
   const studio = useStudio();
+  const account = useCloud().email;
   const [key, setKey] = useState(settings.key);
   const [bad, setBad] = useState(false);
   const [working, setWorking] = useState(false);
@@ -35,8 +38,12 @@ export function Settings({ hidden }: { hidden: boolean }) {
   const credits = settings.key ? studio.credits : null;
 
   return (
+    <>
+    <ResetPassword />
     <div className="page" hidden={hidden}>
       <h1>Settings</h1>
+
+      <Account />
 
       <section className="block">
         <h2>Studio</h2>
@@ -88,7 +95,11 @@ export function Settings({ hidden }: { hidden: boolean }) {
 
       <section className="block">
         <h2>Backup</h2>
-        <p className="note">Everything lives in this browser only. A backup file moves it to another device.</p>
+        <p className="note">
+          {account
+            ? 'A backup file is a copy of everything, to keep wherever you like.'
+            : 'Everything lives in this browser only. A backup file moves it to another device.'}
+        </p>
         <div className="rowbtns">
           <button className="pill" disabled={working || !items.length} onClick={async () => {
             setWorking(true);
@@ -103,7 +114,9 @@ export function Settings({ hidden }: { hidden: boolean }) {
             const f = e.target.files?.[0];
             e.target.value = '';
             if (!f) return;
-            if (items.length && !confirm('Restoring replaces everything in the closet now. Continue?')) return;
+            if (items.length && !confirm(account
+              ? 'Restoring replaces everything in the closet now, on every device signed in to this account. Continue?'
+              : 'Restoring replaces everything in the closet now. Continue?')) return;
             setWorking(true);
             try {
               const n = await restoreBackup(f);
@@ -118,5 +131,6 @@ export function Settings({ hidden }: { hidden: boolean }) {
         </div>
       </section>
     </div>
+    </>
   );
 }

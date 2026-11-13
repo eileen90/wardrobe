@@ -7,8 +7,9 @@ size, to mix into outfits.
   rails, dragging reorders them or moves a piece to another kind.
 - **Looks**: the mixer on top (swipe the rails, or use the arrow keys) and the saved looks under
   it. A saved look opens as a free board: drag, resize, turn, layer, share as a picture.
-- **Private**: no account and no server of our own. Everything stays in the browser;
-  *Settings → Backup* saves it all to one file.
+- **Private**: everything lives in the browser first and works offline. An optional account
+  (*Settings → Account*) keeps the same closet on the phone and the laptop; *Settings → Backup*
+  saves it all to one file.
 
 ## Adding a piece
 
@@ -42,6 +43,35 @@ waiting. It has no quota (8 requests a minute), but it is rougher on prints, som
 harmless photos, and its owner logs the pictures sent to it. The paid model comes back as soon as
 the balance covers a photo again. If the service is busy or the device is offline, photos wait in
 a backlog that survives closing the app and finishes by itself once the studio is reachable.
+
+## Accounts
+
+Sign-in and sync run on a free [Supabase](https://supabase.com) project. Until it is set up, the
+Account section in Settings says so and nothing else changes.
+
+1. Sign in at [supabase.com](https://supabase.com) and create a new project (free plan). Any name,
+   a strong database password (you won't need it again), the region nearest you.
+2. Open **SQL Editor**, paste all of [`supabase/schema.sql`](supabase/schema.sql) and **Run** it.
+   It creates the `items` and `looks` tables, the private `pictures` bucket, and the rules that
+   let each person reach only their own rows and pictures.
+3. Open **Authentication → URL Configuration**. Set **Site URL** to
+   `https://eileen90.github.io/wardrobe/`, and under **Redirect URLs** add
+   `https://eileen90.github.io/wardrobe/**` and `http://localhost:5173/**`.
+4. Open **Project Settings → API** (or **Connect**). Copy the **Project URL** and the
+   **anon / publishable** key into [`src/lib/cloud-config.ts`](src/lib/cloud-config.ts), then push.
+   Both are meant to be public: the row-level security from step 2 protects the data. Never use
+   the `service_role` / secret key here.
+
+How it works: each device keeps its full closet and keeps working offline. Changes wait in an
+outbox and go up when there is a connection; changes from the other device come down when the app
+opens, comes to the front, or every few minutes. The newer change to a piece or look wins. The
+first sign-in on a device adds its closet to the account and the account's to it; nothing is wiped.
+Signing out leaves the closet on the device. Restoring a backup while signed in replaces the
+closet in the account too.
+
+The free plan's built-in email allows only a few messages an hour (sign-up confirmations and
+password resets), and a free project pauses after a week without use: opening it again on
+supabase.com wakes it.
 
 ## Keys
 
