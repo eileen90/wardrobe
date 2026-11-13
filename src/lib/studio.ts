@@ -103,8 +103,12 @@ async function develop(id: string, mode: Mode): Promise<void> {
   let remade = false;
   let problem: string | undefined;
 
-  // 1. Already a cut-out, or already on a plain backdrop: no need to spend a remake.
-  if (mode === 'auto') {
+  const { key, model } = getState().settings;
+
+  // 1. A web picture that is already a cut-out, or already on a plain backdrop, is used
+  //    as it is. Your own photos always go to the model (when the studio is connected),
+  //    because a shirt on a white sheet is plain-backed but still crooked and creased.
+  if (mode === 'auto' || !key) {
     if (raw.type !== 'image/jpeg' && hasTransparency(photo)) {
       cut = trim(photo);
     } else {
@@ -119,7 +123,6 @@ async function develop(id: string, mode: Mode): Promise<void> {
 
   // 2. Everything else is remade by the image model.
   if (!cut) {
-    const { key, model } = getState().settings;
     if (!key) {
       problem = 'Connect the studio in settings to clean this photo.';
     } else {
@@ -217,12 +220,14 @@ export async function redo(id: string, mode: Mode = 'remake') {
 
 /** Pick up pieces that were still waiting when the app was last closed. */
 export function resume() {
-  for (const i of getState().items) if (i.state === 'queued') enqueue(i.id, 'auto');
+  for (const i of getState().items) if (i.state === 'queued') enqueue(i.id, modeFor(i));
 }
+
+const modeFor = (i: Item): Mode => (i.from === 'web' ? 'auto' : 'remake');
 
 /** Send every piece that is still only a photo back through the studio. */
 export function retryRaw() {
-  for (const i of getState().items) if (i.state === 'raw') void redo(i.id, 'auto');
+  for (const i of getState().items) if (i.state === 'raw') void redo(i.id, modeFor(i));
 }
 
 export interface NewPiece {
@@ -230,6 +235,7 @@ export interface NewPiece {
   status: Item['status'];
   name?: string;
   url?: string;
+  from: Item['from'];
 }
 
 /** Store a new picture and queue it for the studio. Returns the new piece's id. */
@@ -253,9 +259,10 @@ export async function addPicture(file: Blob, opts: NewPiece): Promise<string> {
     state: 'queued',
     remade: false,
     aspect: photo.width / photo.height,
+    from: opts.from,
     rev: 0,
   };
   await addItem(item);
-  enqueue(id, 'auto');
+  enqueue(id, modeFor(item));
   return id;
 }

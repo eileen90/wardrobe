@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { usePic } from './lib/store';
 import type { Item } from './lib/types';
 
@@ -47,8 +47,18 @@ export function Mark({ className }: { className?: string }) {
 
 export function Garment({ item, size = 'thumb', small }: { item: Item; size?: 'thumb' | 'full'; small?: boolean }) {
   const url = usePic(item, size);
+  // A piece that comes back from the studio while you watch is wiped in from the top.
+  const was = useRef(item.state);
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => {
+    if (item.state === 'ready' && was.current !== 'ready') setFresh(true);
+    was.current = item.state;
+  }, [item.state]);
   if (item.state === 'ready') {
-    return url ? <img className={'garment' + (small ? ' is-small' : '')} src={url} alt={item.name} draggable={false} /> : null;
+    return url
+      ? <img className={'garment' + (small ? ' is-small' : '') + (fresh ? ' is-fresh' : '')} src={url} alt={item.name}
+          draggable={false} onAnimationEnd={() => setFresh(false)} />
+      : null;
   }
   const developing = item.state === 'queued' || item.state === 'working';
   return (

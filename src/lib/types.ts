@@ -38,6 +38,8 @@ export interface Item {
   remade: boolean;
   /** width / height of the cut-out (or of the photo while there is no cut-out) */
   aspect: number;
+  /** where the picture came from: your own camera roll, or the web */
+  from: 'photo' | 'web';
   /** bumped whenever the pictures change, so cached URLs refresh */
   rev: number;
 }

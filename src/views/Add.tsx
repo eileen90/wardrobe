@@ -5,7 +5,7 @@ import { addPicture } from '../lib/studio';
 import { CATEGORIES, type Category, type Item } from '../lib/types';
 import { Icon, Sheet, toast } from '../ui';
 
-interface Shot { blob: Blob; preview: string; url: string }
+interface Shot { blob: Blob; preview: string; url: string; from: Item['from']; kind: Category | null }
 
 export function Add({ open, onClose, onConnect, startAs }: {
   open: boolean;
@@ -15,7 +15,7 @@ export function Add({ open, onClose, onConnect, startAs }: {
 }) {
   const hasKey = useStore((s) => !!s.settings.key);
   const [shots, setShots] = useState<Shot[]>([]);
-  const [category, setCategory] = useState<Category | null>(null);
+  const [cur, setCur] = useState(0);
   const [status, setStatus] = useState<Item['status']>(startAs);
   const [name, setName] = useState('');
   const [linking, setLinking] = useState(false);
@@ -29,13 +29,13 @@ export function Add({ open, onClose, onConnect, startAs }: {
   useEffect(() => {
     if (!open) return;
     setShots((old) => { old.forEach((s) => URL.revokeObjectURL(s.preview)); return []; });
-    setCategory(null); setStatus(startAs); setName(''); setLinking(false); setLink(''); setError(null); setBusy(false);
+    setCur(0); setStatus(startAs); setName(''); setLinking(false); setLink(''); setError(null); setBusy(false);
   }, [open, startAs]);
 
   const take = (list: (Blob | Imported)[]) => {
     const next = list.map((x) => {
       const blob = x instanceof Blob ? x : x.blob;
-      return { blob, preview: URL.createObjectURL(blob), url: x instanceof Blob ? '' : x.url };
+      return { blob, preview: URL.createObjectURL(blob), url: x instanceof Blob ? '' : x.url, from: x instanceof Blob ? 'photo' as const : 'web' as const, kind: null };
     });
     if (next.length) setShots((s) => [...s, ...next]);
   };
@@ -71,13 +71,23 @@ export function Add({ open, onClose, onConnect, startAs }: {
     }
   };
 
+  // Each photo gets its own kind; choosing one moves on to the next photo without one.
+  const setKind = (kind: Category) => {
+    const next = shots.map((s, i) => (i === cur ? { ...s, kind } : s));
+    setShots(next);
+    const todo = next.findIndex((s, i) => i > cur && !s.kind);
+    const wrap = todo >= 0 ? todo : next.findIndex((s) => !s.kind);
+    if (wrap >= 0) setTimeout(() => setCur(wrap), 220);
+  };
+  const missing = shots.filter((s) => !s.kind).length;
+
   const add = async () => {
-    if (!category || !shots.length) return;
+    if (missing || !shots.length) return;
     setBusy(true);
     let done = 0;
     for (const s of shots) {
       try {
-        await addPicture(s.blob, { category, status, name: shots.length === 1 ? name.trim() : '', url: s.url });
+        await addPicture(s.blob, { category: s.kind!, status, name: shots.length === 1 ? name.trim() : '', url: s.url, from: s.from });
         done++;
       } catch (e) {
         setError(e instanceof Error ? e.message : "One picture couldn't be opened.");
@@ -127,13 +137,19 @@ export function Add({ open, onClose, onConnect, startAs }: {
       {shots.length > 0 && (
         <>
           <div className="shots">
-            {shots.map((s) => <img key={s.preview} src={s.preview} alt="" />)}
+            {shots.map((s, i) => (
+              <button key={s.preview} className={'shot' + (i === cur ? ' is-cur' : '')} onClick={() => setCur(i)}
+                aria-label={`Photo ${i + 1}${s.kind ? ', ' + s.kind : ''}`}>
+                <img src={s.preview} alt="" />
+                {shots.length > 1 && <span className="small">{s.kind ? CATEGORIES.find((c) => c.id === s.kind)!.label : 'choose'}</span>}
+              </button>
+            ))}
           </div>
           <div className="field">
-            <span>Kind</span>
+            <span>{shots.length > 1 ? `Kind of photo ${cur + 1}` : 'Kind'}</span>
             <div className="chips">
               {CATEGORIES.map((c) => (
-                <button key={c.id} className="pill" aria-pressed={category === c.id} onClick={() => setCategory(c.id)}>{c.label}</button>
+                <button key={c.id} className="pill" aria-pressed={shots[cur]?.kind === c.id} onClick={() => setKind(c.id)}>{c.label}</button>
               ))}
             </div>
           </div>
@@ -156,8 +172,10 @@ export function Add({ open, onClose, onConnect, startAs }: {
               <button onClick={() => { onClose(); onConnect(); }}>Connect the studio</button>
             </p>
           )}
-          <button className="go is-wide" disabled={!category || busy} onClick={add}>
-            {busy ? 'Adding' : !category ? 'Pick a kind first' : shots.length === 1 ? 'Add this piece' : `Add ${shots.length} pieces`}
+          <button className="go is-wide" disabled={missing > 0 || busy} onClick={add}>
+            {busy ? 'Adding'
+              : missing ? (shots.length === 1 ? 'Pick a kind first' : `${missing} still ${missing === 1 ? 'needs' : 'need'} a kind`)
+              : shots.length === 1 ? 'Add this piece' : `Add ${shots.length} pieces`}
           </button>
         </>
       )}

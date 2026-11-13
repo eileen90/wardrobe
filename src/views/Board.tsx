@@ -211,9 +211,10 @@ export function Board({ id, onClose }: { id: string; onClose: () => void }) {
     if (item) {
       const w = selected.w * W, h = w / item.aspect, r = (selected.rot * Math.PI) / 180;
       const hx = w / 2 + 6, hy = h / 2 + 6;
+      // Kept inside the board so it can always be reached, even for a piece hanging off the edge.
       handle = {
-        x: selected.x * W + hx * Math.cos(r) - hy * Math.sin(r),
-        y: selected.y * H + hx * Math.sin(r) + hy * Math.cos(r),
+        x: Math.min(W - 18, Math.max(18, selected.x * W + hx * Math.cos(r) - hy * Math.sin(r))),
+        y: Math.min(H - 18, Math.max(18, selected.y * H + hx * Math.sin(r) + hy * Math.cos(r))),
       };
     }
   }

@@ -56,6 +56,12 @@ export function Studio({ hidden }: { hidden: boolean }) {
             <span className="small muted">credits left, about {Math.floor(credits / per)} photos</span>
           </div>
         )}
+        {settings.key && typeof credits === 'number' && credits < per * 10 && (
+          <p className="note">
+            Running low. Claim more free credits on the{' '}
+            <a href="https://enter.pollinations.ai/quests" target="_blank" rel="noreferrer">Quests page</a>, or top up there.
+          </p>
+        )}
         {settings.key && credits === 'checking' && <p className="note">Checking the key.</p>}
         {settings.key && credits === 'bad' && (
           <p className="problem" style={{ margin: 0 }}>This key wasn't accepted. Paste it again, or make a new one.</p>

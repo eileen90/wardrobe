@@ -56,23 +56,40 @@ export function hasPlainBackdrop(d: ImageData) {
 /* ---------- alpha from the backdrop colour ---------- */
 
 /**
- * Distance from the backdrop's colour *line*: brightness along the key direction is
- * ignored so soft shadows on the backdrop (darker, same hue) still count as backdrop.
+ * How much each pixel is garment (255) rather than backdrop (0), for a saturated backdrop.
+ *
+ * Two tests, and a pixel is backdrop if either says so:
+ *  - it lies on the backdrop's colour *line* (same colour, any brightness), which catches
+ *    the soft shadows a garment throws on the backdrop;
+ *  - it has the backdrop's *hue* and is clearly coloured, which catches backdrops that
+ *    come back unevenly lit, with a paler or deeper patch.
+ * The backdrop hue is chosen to be one the garment doesn't contain, so neither test bites into it.
  */
 function chromaAlpha(d: ImageData, k: RGB): Uint8ClampedArray {
   const { width: w, height: h, data } = d;
   const kl = Math.hypot(k[0], k[1], k[2]) || 1;
   const kn = [k[0] / kl, k[1] / kl, k[2] / kl];
+  const kh = hueOf(k[0], k[1], k[2]).h;
   const out = new Uint8ClampedArray(w * h);
   for (let p = 0, i = 0; p < w * h; p++, i += 4) {
     const r = data[i], g = data[i + 1], b = data[i + 2];
+    // colour line
     const lum = r * kn[0] + g * kn[1] + b * kn[2];
     const resid = Math.hypot(r - lum * kn[0], g - lum * kn[1], b - lum * kn[2]);
-    const rel = resid / (lum + 20);
-    let a = (rel - 0.1) / 0.18;
+    let a = (resid / (lum + 20) - 0.1) / 0.18;
     // Very dark pixels are garment, never backdrop shadow.
     const dark = (0.3 * kl - lum) / (0.12 * kl);
     if (dark > a) a = dark;
+    // hue
+    const mx = Math.max(r, g, b);
+    if (a > 0 && mx > 60) {
+      const px = hueOf(r, g, b);
+      const off = Math.abs(((px.h - kh + 540) % 360) - 180);
+      const hueMatch = (38 - off) / 16;          // 1 within 22 degrees, 0 beyond 38
+      const coloured = (px.s - 0.2) / 0.22;       // 1 above 42% saturation, 0 below 20%
+      const keyness = Math.min(1, Math.max(0, hueMatch)) * Math.min(1, Math.max(0, coloured));
+      if (1 - keyness < a) a = 1 - keyness;
+    }
     out[p] = a <= 0 ? 0 : a >= 1 ? 255 : a * 255;
   }
   return out;
