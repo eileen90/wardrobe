@@ -111,8 +111,6 @@ export interface Settings {
   redoModel?: string;
   /** shortcuts the owner rebound, by id (see shortcuts.ts) */
   shortcuts?: Record<string, string>;
-  /** the model "redo the picture" uses; REDO_MODEL when unset */
-  redoModel?: string;
   /** the outfit being put together on the looks page */
   working?: WorkingLook;
 }
