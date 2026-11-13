@@ -434,7 +434,6 @@ img {
   left: 0;
   display: block;
   transform-origin: 50% 50%;
-  will-change: transform;
 }
 .is-morph .piece {
   transition: transform 1.15s var(--morph) var(--d, 0s), width 1.15s var(--morph) var(--d, 0s),
