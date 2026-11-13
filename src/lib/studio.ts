@@ -74,13 +74,32 @@ export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length' | '
       : 'Keep its true proportions exactly as in the photo.',
     'The whole item is visible and centred, with empty background margin on all four sides. Do not stretch or lengthen it to fill the frame: leave more empty background instead.',
     KEEP_KIND,
-    'Keep the exact same colour, fabric texture, pattern, logo, print and every detail.',
-    'Smooth out wrinkles into soft natural fabric folds. Soft even neutral white studio lighting.',
+    KEEP_LOOK,
+    'Smooth out wrinkles into soft natural fabric folds.',
     'No hanger, no person, no body parts, no other objects, no text, no watermark.',
-    `The background is one flat solid ${backdrop} colour filling the whole frame edge to edge, perfectly uniform, no gradient, no shadow, no floor.`,
+    backdropWords(backdrop),
     fixes && `A previous attempt got details wrong. Be sure to: ${fixes}`,
   ].filter(Boolean).join(' ');
 }
+
+/**
+ * Colour and texture. "Neutral white studio lighting" alone made the model white-balance a
+ * warmly lit photo all the way: beige trousers came back cream, an olive cardigan grey.
+ * Said only in positive words: the image model's text encoder reads "never paler, never
+ * washed out" as "paler, washed out" (an orange sweater came back peach).
+ */
+const KEEP_LOOK =
+  'Exactly the same colours as in the photo, just as rich, deep and saturated: the same hue and the same depth of every ' +
+  'colour. The exact same pattern, print, logo and every detail. Crisp true fabric texture: knit stitches, weave, grain, ' +
+  'leather sheen. Soft even studio lighting.';
+
+/**
+ * The backdrop, and no light from it on the piece: the model used to light dark bags with
+ * their backdrop, so their undersides came out blue or purple.
+ */
+const backdropWords = (backdrop: string) =>
+  `The background is one flat solid ${backdrop} colour filling the whole frame edge to edge, perfectly uniform, ` +
+  'no gradient, no shadow, no floor. The item is lit only by neutral white light.';
 
 const KEEP_KIND =
   'It stays exactly the same kind of object as in the photo. Never add sleeves, arms, hands, a body, a head, a mannequin or any part the item does not have.';
@@ -92,9 +111,9 @@ function unsurePrompt(backdrop: string, fixes: string) {
     'Keep its true shape, size and proportions exactly as in the photo.',
     'The whole item is visible and centred, with empty background margin on all four sides. Do not stretch it to fill the frame.',
     KEEP_KIND,
-    'Keep the exact same colour, fabric texture, pattern, logo, print and every detail. Soft even neutral white studio lighting.',
+    KEEP_LOOK,
     'No hanger, no person, no other objects, no text, no watermark.',
-    `The background is one flat solid ${backdrop} colour filling the whole frame edge to edge, perfectly uniform, no gradient, no shadow, no floor.`,
+    backdropWords(backdrop),
     fixes && `A previous attempt got details wrong. Be sure to: ${fixes}`,
   ].filter(Boolean).join(' ');
 }
@@ -112,10 +131,14 @@ export function frameFor(item: Pick<Item, 'category' | 'length'>, photoAspect: n
     case 'socks': return photoAspect > 1.25 ? WIDE : PORTRAIT;
     case 'bag':
     case 'extra': return photoAspect > 1.25 ? WIDE : photoAspect < 0.8 ? PORTRAIT : SQUARE;
-    case 'bottom': return !item.length || long ? TALL : PORTRAIT;
+    // Shorts are about square; "cropped" trousers stop just above the ankle, so they are long.
+    case 'bottom': return item.length === 'thigh' || item.length === 'hip' ? SQUARE : item.length === 'knee' ? PORTRAIT : TALL;
     case 'dress': return !item.length || long ? TALL : PORTRAIT;
     default:
       if (long) return TALL;
+      // A hip-length shirt laid flat, sleeves at its sides, is about as wide as it is long; in a
+      // portrait frame the model fills the height and it comes back tunic length.
+      if (item.length === 'cropped' || item.length === 'hip') return SQUARE;
       // Unknown length: a tall frame invites the model to stretch a shirt into a tunic.
       if (item.category === 'outer' && !item.length && photoAspect < 0.62) return TALL;
       return PORTRAIT;
@@ -216,7 +239,10 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
       if (hasPlainBackdrop(d)) {
         const copy = makeCanvas(photo.width, photo.height);
         copy.getContext('2d')!.drawImage(photo, 0, 0);
-        cut = cutOut(copy)?.canvas ?? null;
+        const res = cutOut(copy);
+        // A piece nearly the colour of its backdrop (a white sneaker on white) is told apart only
+        // by a faint outline; with a key, the model draws it again on a colour it can't be mistaken for.
+        cut = res && !(key && res.doubt > 0.12) ? res.canvas : null;
       }
     }
   }
@@ -227,7 +253,8 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
   const again = forced.has(id) && WORN(item.category) && !item.length;
   if (key && (!item.kindSure || again)) {
     try {
-      const seen = await look(key, await blobToDataUrl(await flatJpeg(scaled(photo, 384), 0.72)), signal);
+      // Big enough to see that a strap is not a sleeve, or a scarf's edge not a collar.
+      const seen = await look(key, await blobToDataUrl(await flatJpeg(scaled(photo, 768), 0.85)), signal);
       if (seen) {
         await updateItem(id, {
           ...(item.kindSure ? {} : { category: seen.kind, kindSure: true }),
@@ -268,7 +295,9 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
       for (const b of rankBackdrops(photo).slice(0, 2)) {
         const out = await remakeWithBackup({ key, model, photo: dataUrl, size, signal, prompt: studioPrompt(item, b.words, fixes) });
         const shot = scaled(await loadImage(out), CUT_MAX);
-        const res = cutOut(shot);
+        // A photo without any of the backdrop's colour: whatever of it is on the remake is
+        // light the model bounced off its backdrop, and comes off everywhere.
+        const res = cutOut(shot, b.share < 0.02);
         if (res) {
           cut = res.canvas;
           remade = true;
@@ -289,6 +318,16 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
   }
   const full = await saveCut(id, cut);
   refreshPics(id);
+  // Still not sure what it is (the look on the photo failed): the clean cut-out is far easier
+  // to read than a photo of something on a hanger, so look at that before guessing from the outline.
+  let seenAfter: Awaited<ReturnType<typeof look>> = null;
+  if (key && !cur.kindSure) {
+    try {
+      seenAfter = await look(key, await blobToDataUrl(await flatJpeg(scaled(full, 768), 0.85)), signal);
+    } catch (e) {
+      if (!(e instanceof StudioError) || (e.kind !== 'fail' && e.kind !== 'credits')) throw e;
+    }
+  }
   await updateItem(id, {
     state: 'ready',
     remade,
@@ -296,8 +335,10 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
     colors: palette(full),
     rev: cur.rev + 1,
     problem: undefined,
-    // Last resort for the kind: the outline of the cut-out.
-    ...(cur.kindSure ? {} : { category: kindFromShape(full) }),
+    // Last resort for the kind: the outline of the cut-out, still marked as a guess.
+    ...(cur.kindSure ? {} : seenAfter
+      ? { category: seenAfter.kind, kindSure: true, length: seenAfter.length, name: cur.name || seenAfter.name }
+      : { category: kindFromShape(full) }),
   });
 }
 

@@ -73,23 +73,33 @@ export function kindFromShape(cut: HTMLCanvasElement): Category {
       width: rows.reduce((t, r) => t + r.width, 0) / n,
     };
   };
-  const top = band(0.04, 0.2), low = band(0.72, 0.94);
+  const top = band(0.04, 0.2), upper = band(0.22, 0.36), mid = band(0.4, 0.6), low = band(0.72, 0.94);
+  const widest = Math.max(top.width, upper.width, mid.width, low.width) || 1;
 
   if (aspect > 1.45) return 'shoes';
   // Two legs: the lower part splits in two while the waist is one piece.
   if (aspect < 0.95 && low.split > 0.55 && top.split < 0.3) return 'bottom';
+  // A handle or strap above a wider body is a bag. Garments have shoulders or a waistband
+  // nearly as wide as the rest; a bag hung up by its strap used to be filed as a jacket.
+  // (A dress is narrow at the straps too, but full width again by the chest.)
+  if (aspect > 0.4 && top.width < 0.5 * widest && upper.width < 0.65 * widest && low.split < 0.5) return 'bag';
   if (aspect < 0.52) return low.split > 0.3 ? 'bottom' : 'dress';
-  // Sleeves hanging beside the body split the lower rows into three stretches; that is a top or a coat.
-  if (aspect < 0.66) return 'outer';
+  // Sleeves hanging beside the body split the lower rows into three stretches: a long top or a
+  // coat. Without that, a long narrow outline is a dress.
+  if (aspect < 0.66) return low.split > 0.3 ? 'outer' : 'dress';
   return 'top';
 }
 
 /* ---------- real size ---------- */
 
-/** Shoulder (or waist, for bottoms) to hem, in centimetres. */
+/**
+ * Shoulder (or waist, for bottoms) to hem, in centimetres. "Cropped" trousers are the ones
+ * that stop above the ankle, not shorts: reading it as 34 cm drew a pair of cropped trousers
+ * at a third of the height of the others.
+ */
 const DROP: Record<'body' | 'legs', Record<Length, number>> = {
   body: { cropped: 44, hip: 64, thigh: 80, knee: 98, calf: 114, ankle: 128 },
-  legs: { cropped: 34, hip: 36, thigh: 40, knee: 62, calf: 82, ankle: 100 },
+  legs: { cropped: 88, hip: 26, thigh: 38, knee: 60, calf: 82, ankle: 100 },
 };
 
 /** Typical flat-lay width and the heights a kind can believably have, in centimetres. */
@@ -98,26 +108,39 @@ const BUILD: Record<Category, { w: number; min: number; max: number }> = {
   top: { w: 60, min: 42, max: 82 },
   dress: { w: 54, min: 76, max: 132 },
   bottom: { w: 44, min: 30, max: 106 },
-  socks: { w: 22, min: 16, max: 50 },
-  shoes: { w: 40, min: 12, max: 44 },
-  bag: { w: 36, min: 16, max: 48 },
+  // A pair side by side: ankle socks about 18 cm, knee socks up to 45. (22 made an ankle sock 36 cm.)
+  socks: { w: 16, min: 12, max: 45 },
+  // A pair from the side is about 30 cm long; from above no more than 34 tall.
+  shoes: { w: 30, min: 12, max: 34 },
+  // A shoulder bag's outline includes its strap: 48 cm squeezed the body of a long-strapped
+  // crossbody bag to a sliver. Still kept below a top's 64 cm.
+  bag: { w: 32, min: 16, max: 56 },
   extra: { w: 26, min: 6, max: 40 },
 };
+
+/** Scarves are the big accessories: a square silk one is 70–90 cm, a long one over 150. */
+const SCARF = { w: 70, min: 30, max: 170 };
+const isScarf = (name: string | undefined) => !!name && /scarf|scarves|shawl|stole|wrap|bandana|圍巾|围巾|披肩|マフラー|スカーフ|스카프|목도리/i.test(name);
 
 /**
  * How big a piece is in real life, in centimetres. The hem length is used when it is known;
  * otherwise the outline's proportions on a typical width for its kind. This is what lets a
  * long coat lie longer than a cropped jacket everywhere pieces are shown side by side.
  */
-export function realSize(item: Pick<Item, 'category' | 'aspect' | 'length' | 'state'>): { w: number; h: number } {
+export function realSize(item: Pick<Item, 'category' | 'aspect' | 'length' | 'state'> & { name?: string }): { w: number; h: number } {
   const a = item.aspect > 0 ? item.aspect : 1;
   // A photo that is not cut out yet says nothing about the garment's shape: show it as a print.
   if (item.state !== 'ready') return a >= 1 ? { w: 46, h: 46 / a } : { w: 46 * a, h: 46 };
-  const b = BUILD[item.category];
+  const b = item.category === 'extra' && isScarf(item.name) ? SCARF : BUILD[item.category];
+  // From the outline alone: a typical width for the kind, and the cut-out's proportions.
+  const byShape = Math.min(b.max, Math.max(b.min, b.w / a));
   let h: number;
   if (item.length && (item.category === 'outer' || item.category === 'top' || item.category === 'dress')) h = DROP.body[item.length];
   else if (item.length && item.category === 'bottom') h = DROP.legs[item.length];
-  else h = Math.min(b.max, Math.max(b.min, b.w / a));
+  else h = byShape;
+  // A length that the outline flatly contradicts (long narrow legs "knee length", a short wide
+  // pair "ankle length") is a misreading: the outline wins.
+  if (h !== byShape && (item.category === 'bottom' || item.category === 'dress') && (h < byShape / 1.6 || h > byShape * 1.6)) h = byShape;
   let w = h * a;
   // Sleeves spread wide (or a very full skirt) can make the outline far wider than any body.
   const widest = b.w * 1.9;
