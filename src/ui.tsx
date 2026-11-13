@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { isKey } from './lib/shortcuts';
 import { usePic } from './lib/store';
 import type { Item } from './lib/types';
 
@@ -102,7 +103,7 @@ export function Sheet({ open, onClose, children, label }: {
   }, [open]);
   useEffect(() => {
     if (!open) return;
-    const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const k = (e: KeyboardEvent) => { if (!e.defaultPrevented && isKey(e, 'close', { inField: true })) onClose(); };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, [open, onClose]);

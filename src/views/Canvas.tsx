@@ -11,7 +11,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { bounds, frame, toWorld, union, zoomAround, type Box, type Insets, type Rect, type View } from '../lib/canvas';
-import { isKey, isPointer } from '../lib/shortcuts';
+import { arrowOf, covered, isKey, isPointer } from '../lib/shortcuts';
 import type { Item } from '../lib/types';
 import { Garment } from '../ui';
 
@@ -28,8 +28,6 @@ export interface HudState { hover: boolean; selected: boolean; lifted: boolean; 
 
 const place = (b: Box) =>
   `translate3d(${(b.cx - b.w / 2).toFixed(2)}px, ${(b.cy - b.h / 2).toFixed(2)}px, 0) rotate(${b.rot.toFixed(2)}deg)`;
-
-const typing = (t: EventTarget | null) => t instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
 
 type Gesture =
   | { kind: 'press'; pid: number; id: string; sx: number; sy: number; touch: boolean; lift?: ReturnType<typeof setTimeout>; hold?: ReturnType<typeof setTimeout> }
@@ -371,8 +369,8 @@ export function Canvas(props: {
       e.preventDefault();
       const r = el.getBoundingClientRect();
       const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? r.height : 1;
-      // A trackpad pinch arrives as a wheel with ctrlKey set, on every browser.
-      if (e.ctrlKey || e.metaKey) {
+      // A trackpad pinch arrives as a wheel with Ctrl held, on every browser.
+      if (e.ctrlKey || isPointer(e, 'zoom')) {
         const v = view.current;
         // A mouse wheel's notch is a big jump; a pinch sends many small ones.
         const dy = Math.max(-40, Math.min(40, e.deltaY * k));
@@ -406,9 +404,8 @@ export function Canvas(props: {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       const P = live.current;
-      if (!P.active || e.defaultPrevented || typing(e.target)) return;
-      // A sheet or a piece's page on top has the keyboard; so does a board over a page.
-      if (document.querySelector('.sheet, .focus') || (!P.paper && document.querySelector('.board'))) return;
+      // Whatever lies on top (a sheet, a piece's page, a board over a page) has the keyboard.
+      if (!P.active || e.defaultPrevented || covered(root.current?.closest('.board') ? 'board' : 'page')) return;
       root.current?.classList.toggle('is-resizing-key', isPointer(e, 'resize'));
       const ids = [...P.sel].filter((id) => P.pieces.some((p) => p.id === id));
       if (isKey(e, 'selectAll')) { e.preventDefault(); P.onSel(new Set(P.pieces.map((p) => p.id))); return; }
@@ -418,8 +415,8 @@ export function Canvas(props: {
       const nudge = 6 / view.current.z;
       if (isKey(e, 'nudge')) {
         e.preventDefault();
-        const d = { arrowleft: [-nudge, 0], arrowright: [nudge, 0], arrowup: [0, -nudge], arrowdown: [0, nudge] }[e.key.toLowerCase()];
-        if (d) P.onMove(ids, d[0], d[1], true);
+        const d = arrowOf(e);
+        if (d) P.onMove(ids, d[0] * nudge, d[1] * nudge, true);
         return;
       }
       if (isKey(e, 'grow')) { e.preventDefault(); P.onResize(ids, 1.06, true); return; }

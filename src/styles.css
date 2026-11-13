@@ -2032,3 +2032,44 @@ label.way {
   pointer-events: none;
 }
 /* ===== One canvas: end ===== */
+
+/* ----- shortcuts: in Settings, and over anything with F12 ----- */
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.keys__group {
+  display: flex;
+  flex-direction: column;
+}
+.keys__group .label {
+  margin-bottom: 6px;
+}
+.keys__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-top: 1px dashed var(--faint);
+}
+.keys__bind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pill.is-key {
+  min-width: 44px;
+  min-height: 30px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 13px;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+kbd.pill.is-key {
+  border-style: solid;
+  border-color: var(--faint);
+  background: transparent;
+}

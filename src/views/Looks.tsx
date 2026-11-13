@@ -66,7 +66,7 @@ export function Looks({ hidden, active, startWith, onOpen, onFocus, onAdd }: {
         <div className="looks__grid is-tight">
           {looks.map((l) => (
             <button key={l.id} className="lookcard" onClick={() => open(l.id)}
-              onKeyDown={(e) => { if (isKey(e, 'remove') || isKey(e, 'clear')) deleteLook(l.id); }}>
+              onKeyDown={(e) => { if (isKey(e, 'remove')) deleteLook(l.id); }}>
               <MiniBoard look={l} items={items} />
               <span className="lookcard__name">{l.name || 'Untitled'}</span>
             </button>

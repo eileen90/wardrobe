@@ -3,13 +3,11 @@ import { deleteLook, step } from '../lib/actions';
 import { addPiece, BH, boxOnBoard, BW, widthOn } from '../lib/boards';
 import { shareLook } from '../lib/exportBoard';
 import { undoLast, useLastStep } from '../lib/history';
-import { isKey } from '../lib/shortcuts';
+import { covered, hint, isDone, isKey, useBindings } from '../lib/shortcuts';
 import { removeLook, saveLook, useStore } from '../lib/store';
 import { CATEGORIES, PAPERS, uid, type Category, type Item, type Look, type Placed } from '../lib/types';
 import { Garment, Icon, Sheet, toast } from '../ui';
 import { Canvas, type CanvasAction, type CanvasApi, type CanvasPiece } from './Canvas';
-
-const typing = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(t.tagName);
 
 /**
  * Change a look's pieces as one step in the history. Shared by saved boards and the looks page,
@@ -47,6 +45,7 @@ export function Board({ id, onClose, onFocus }: {
   const items = useStore((s) => s.items);
   const look = useStore((s) => s.looks.find((l) => l.id === id));
   const lastStep = useLastStep();
+  useBindings();
   const [sel, setSel] = useState<Set<string>>(() => new Set());
   const [cat, setCat] = useState<Category | 'all'>('all');
   const [more, setMore] = useState(false);
@@ -80,8 +79,7 @@ export function Board({ id, onClose, onFocus }: {
   };
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (e.defaultPrevented || more || document.querySelector('.focus')) return;
-    if (typing(e.target)) { if (isKey(e, 'close')) (e.target as HTMLElement).blur(); return; }
+    if (e.defaultPrevented || covered('board')) return;
     if (isKey(e, 'close')) { e.preventDefault(); close(); }
   };
   useEffect(() => {
@@ -150,8 +148,9 @@ export function Board({ id, onClose, onFocus }: {
         <input className="board__name" value={name} placeholder="Name this look" enterKeyHint="done"
           onChange={(e) => setName(e.target.value)}
           onBlur={() => { if (live.current && name !== live.current.name) commit({ ...live.current, name }, 'Renamed'); }}
-          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
-        <button className="iconbtn" onClick={() => void undoLast()} disabled={!lastStep} aria-label="Undo"><Icon name="undo" /></button>
+          onKeyDown={(e) => isDone(e) && e.currentTarget.blur()} />
+        <button className="iconbtn" onClick={() => void undoLast()} disabled={!lastStep} aria-label="Undo"
+          title={lastStep ? `Undo: ${lastStep} (${hint('undo')})` : undefined}><Icon name="undo" /></button>
         <button className="iconbtn" disabled={!look.pieces.length} aria-label="Share as a picture" onClick={async () => {
           const r = await shareLook(look, items);
           if (r === 'saved') toast('Picture saved');

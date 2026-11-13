@@ -6,7 +6,7 @@ import {
   PX, type FloorLayout, type GroupId,
 } from '../lib/floor';
 import { realSize } from '../lib/kind';
-import { isKey, isPointer } from '../lib/shortcuts';
+import { covered, held, hint, isKey, isPointer, useBindings } from '../lib/shortcuts';
 import { saveSettings, updateItem, useStore } from '../lib/store';
 import { CATEGORIES, catPlural, type Category, type Item } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, useViewport } from '../ui';
@@ -15,7 +15,6 @@ import { SelectionBar } from './Selection';
 
 export interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
 
-const typing = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(t.tagName);
 const clampS = (s: number) => Math.min(4, Math.max(0.3, s));
 
 /* ---------- lined up: one rail per kind ---------- */
@@ -167,7 +166,7 @@ function Rails({ shown, items, floor, sel, setSel, order, onOpen, sequence }: {
     if (isPointer(e, 'select')) { skip.current = true; return toggle(item.id); }
     if (isPointer(e, 'selectRange')) { skip.current = true; return range(item.id); }
     // Nothing else is dragged with a modifier held (resizing has no meaning in the rails).
-    if (e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) { skip.current = true; return; }
+    if (held(e)) { skip.current = true; return; }
     const b = live.current.boxes.get(item.id);
     if (!b) return;
     const p = world(e.clientX, e.clientY);
@@ -310,6 +309,7 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
   const [sel, setSel] = useState<Set<string>>(() => new Set());
   const [drop, setDrop] = useState<{ cluster: string; ids: string[] } | null>(null);
   const api = useRef<CanvasApi | null>(null);
+  useBindings();
 
   /** One arrangement for both views. */
   const floor = useMemo(() => layFloor(items), [items]);
@@ -337,9 +337,9 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
   // The rails have no canvas of their own to listen for these.
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (hidden || !active || mode !== 'grid' || e.defaultPrevented || typing(e.target) || document.querySelector('.focus, .sheet, .board')) return;
+    if (hidden || !active || mode !== 'grid' || e.defaultPrevented || covered('page')) return;
     if (isKey(e, 'selectAll')) { e.preventDefault(); setSel(new Set(shown.map((i) => i.id))); }
-    else if (sel.size && isKey(e, 'close') && !document.querySelector('.selbar__panel')) { e.preventDefault(); setSel(new Set()); }
+    else if (sel.size && isKey(e, 'close')) { e.preventDefault(); setSel(new Set()); }
     else if (sel.size && isKey(e, 'remove')) { e.preventDefault(); removeMany([...sel]); setSel(new Set()); }
   };
   useEffect(() => {
@@ -492,7 +492,7 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
         )}
         <button className="go" onClick={onAdd}><Icon name="plus" />Add</button>
         {mode !== 'grid' && (
-          <button className="round glass is-quiet" aria-label="Fit everything" title="Fit everything" onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
+          <button className="round glass is-quiet" aria-label="Fit everything" title={`Fit everything (${hint('fit')})`} onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
         )}
         <button className="round glass" aria-label="Filter" onClick={() => setFilterOpen(true)}>
           <Icon name="filter" />{nActive > 0 && <span className="dot">{nActive}</span>}

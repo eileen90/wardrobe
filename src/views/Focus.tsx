@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { editPiece, redoPiece, removePiece, stopStudio } from '../lib/actions';
 import { brandFromSite, cleanUrl, siteOf } from '../lib/links';
 import { CURRENCIES, groupDigits, parsePrice, signOf } from '../lib/money';
+import { covered, isDone, isKey } from '../lib/shortcuts';
 import { saveSettings, useStore } from '../lib/store';
 import { CATEGORIES, type Item } from '../lib/types';
 import { Garment, Icon, toast } from '../ui';
@@ -20,7 +21,7 @@ function Field({ value, onSave, placeholder, area, className, label }: {
   return area
     ? <textarea rows={2} {...props} />
     : <input {...props} autoCorrect="off" enterKeyHint="done"
-        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />;
+        onKeyDown={(e) => isDone(e) && e.currentTarget.blur()} />;
 }
 
 /** A number and a currency bubble. Pasting "¥4,990" sets both. */
@@ -48,7 +49,7 @@ function Price({ item }: { item: Item }) {
           onClick={() => setChoosing(!choosing)}>{signOf(item.currency)}</button>
         <input value={v} placeholder="0" inputMode="decimal" aria-label="Price" enterKeyHint="done" autoCorrect="off"
           onChange={(e) => setV(e.target.value)} onBlur={commit}
-          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+          onKeyDown={(e) => isDone(e) && e.currentTarget.blur()} />
       </div>
       {choosing && (
         <div className="chips">
@@ -91,11 +92,9 @@ function LinkField({ item }: { item: Item }) {
       onChange={(e) => setV(e.target.value)}
       onPaste={(e) => { const t = e.clipboardData.getData('text'); if (cleanUrl(t)) { e.preventDefault(); commit(t); } }}
       onBlur={() => commit(v)}
-      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+      onKeyDown={(e) => isDone(e) && e.currentTarget.blur()} />
   );
 }
-
-const typing = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(t.tagName);
 
 export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }: {
   id: string;
@@ -160,15 +159,11 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (typing(e.target)) {
-        if (e.key === 'Escape') (e.target as HTMLElement).blur();
-        return;
-      }
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === 'Escape') close();
-      else if (e.key === 'ArrowLeft') go(-1);
-      else if (e.key === 'ArrowRight') go(1);
-      else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove(); }
+      if (e.defaultPrevented || covered('focus')) return;
+      if (isKey(e, 'close')) close();
+      else if (isKey(e, 'prev')) go(-1);
+      else if (isKey(e, 'next')) go(1);
+      else if (isKey(e, 'remove')) { e.preventDefault(); remove(); }
     };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);

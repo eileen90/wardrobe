@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { editMany, redoMany, removeMany } from '../lib/actions';
+import { isKey } from '../lib/shortcuts';
 import { useStore } from '../lib/store';
 import { CATEGORIES } from '../lib/types';
 import { Icon } from '../ui';
@@ -16,9 +17,10 @@ export function SelectionBar({ ids, total, onAll, onClear }: {
 
   useEffect(() => {
     if (!panel) return;
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setPanel(null); };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    // Esc closes the panel first, before it clears the selection.
+    const k = (e: KeyboardEvent) => { if (isKey(e, 'close')) { e.preventDefault(); setPanel(null); } };
+    window.addEventListener('keydown', k, true);
+    return () => window.removeEventListener('keydown', k, true);
   }, [panel]);
 
   const done = () => { setPanel(null); onClear(); };

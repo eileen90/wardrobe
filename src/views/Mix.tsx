@@ -3,7 +3,7 @@ import { keepLook, step } from '../lib/actions';
 import { BH, boxOnBoard, BW, fitBoard, flatLay, LAYER, LOOK_CM, newLook } from '../lib/boards';
 import { bounds } from '../lib/canvas';
 import { realSize } from '../lib/kind';
-import { isKey } from '../lib/shortcuts';
+import { covered, hint, isKey, useBindings } from '../lib/shortcuts';
 import { getState, saveSettings, useStore } from '../lib/store';
 import { BOARD_RATIO, uid, type Category, type Item, type Placed, type WorkingLook } from '../lib/types';
 import { Icon, Mark, toast } from '../ui';
@@ -26,7 +26,6 @@ const RAIL = Object.fromEntries(RAILS.map((r) => [r.id, r])) as Record<RailId, (
 /** The order the rail keys walk through: down the body, then the sides. */
 const KEY_ORDER: RailId[] = ['extra', 'outer', 'top', 'bag', 'bottom', 'socks', 'shoes'];
 
-const typing = (t: EventTarget | null) => t instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
 const EMPTY: WorkingLook = { pieces: [], kept: [], wish: true };
 const hf = (p: Placed, item: Item) => (p.w / (item.aspect || 1)) * BOARD_RATIO;
 
@@ -75,6 +74,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
   const [cur, setCur] = useState<RailId | null>(null);
   const [picking, setPicking] = useState<RailId | null>(null);
   const api = useRef<CanvasApi | null>(null);
+  useBindings();
 
   const pools = useMemo(() => {
     const ready = items.filter((i) => i.state === 'ready' && (work.wish || i.status === 'owned'));
@@ -193,7 +193,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
   // Keys for building, when no piece is selected (a selection takes the canvas keys).
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
-    if (!active || e.defaultPrevented || typing(e.target) || document.querySelector('.sheet, .focus, .board')) return;
+    if (!active || e.defaultPrevented || covered('page')) return;
     const order = KEY_ORDER.filter((r) => worn.has(r));
     const target = picking ?? (cur && order.includes(cur) ? cur : null);
     const handled = () => e.preventDefault();
@@ -211,8 +211,8 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
       if (picking) { handled(); setPicking(null); } else if (cur) { handled(); setCur(null); }
     } else if (isKey(e, 'shuffle')) { handled(); shuffle(); }
     else if (isKey(e, 'keep') && target) { handled(); keep(target); }
-    else if (isKey(e, 'clear') && target) { handled(); clear([target]); }
-    else if (isKey(e, 'pickAll') && target && !(e.target instanceof HTMLButtonElement)) { handled(); setPicking(picking === target ? null : target); }
+    else if (isKey(e, 'remove') && target) { handled(); clear([target]); }
+    else if (isKey(e, 'pickAll') && target) { handled(); setPicking(picking === target ? null : target); }
     else if (isKey(e, 'save')) { handled(); void save(); }
   };
   useEffect(() => {
@@ -311,9 +311,9 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
 
       <div className="mix__dock">
         {children}
-        <button className="round glass" aria-label="Shuffle" title="Shuffle what is not kept" onClick={shuffle}><Icon name="shuffle" /></button>
-        <button className="go" onClick={save} disabled={!pieces.length}>Save this look</button>
-        <button className="round glass is-quiet" aria-label="Fit everything" title="Fit everything" onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
+        <button className="round glass" aria-label="Shuffle" title={`Shuffle (${hint('shuffle')})`} onClick={shuffle}><Icon name="shuffle" /></button>
+        <button className="go" onClick={save} disabled={!pieces.length} title={hint('save')}>Save this look</button>
+        <button className="round glass is-quiet" aria-label="Fit everything" title={`Fit everything (${hint('fit')})`} onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
       </div>
     </div>
   );

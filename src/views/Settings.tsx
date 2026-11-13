@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { download, makeBackup, restoreBackup } from '../lib/backup';
 import { useCloud } from '../lib/cloud';
 import { TOP_UP_URL } from '../lib/pollinations';
+import { isDone } from '../lib/shortcuts';
 import { saveSettings, useStore } from '../lib/store';
 import { keyChanged, refreshCredits, resume, tryAgain, useStudio } from '../lib/studio';
 import { costOf, MODELS, REDO_MODEL } from '../lib/types';
 import { toast } from '../ui';
 import { Account, ResetPassword } from './Account';
+import { ShortcutList } from './Shortcuts';
+
+/** A phone without a keyboard has no use for shortcuts. */
+const touchOnly = matchMedia('(hover: none) and (pointer: coarse)').matches;
 
 export function Settings({ hidden }: { hidden: boolean }) {
   const settings = useStore((s) => s.settings);
@@ -69,7 +74,7 @@ export function Settings({ hidden }: { hidden: boolean }) {
             onChange={(e) => setKey(e.target.value)}
             onPaste={(e) => { const t = e.clipboardData.getData('text').trim(); if (t) { e.preventDefault(); setKey(t); void connect(t); } }}
             onBlur={() => void connect(key)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
+            onKeyDown={(e) => isDone(e) && e.currentTarget.blur()} />
         </label>
         {!settings.key && (
           <p className="note">
@@ -102,6 +107,13 @@ export function Settings({ hidden }: { hidden: boolean }) {
           ))}
         </div>
       </section>
+
+      {!touchOnly && (
+        <section className="block" id="shortcuts">
+          <h2>Shortcuts</h2>
+          <ShortcutList edit />
+        </section>
+      )}
 
       <section className="block">
         <h2>Backup</h2>
