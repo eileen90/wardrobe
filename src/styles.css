@@ -1813,3 +1813,25 @@ label.way {
 .app:has(.focus, .board) .toast.is-on {
   transform: translate(-50%, 0);
 }
+/* ===== Account (src/views/Account.tsx): start ===== */
+.acct__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.acct__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.acct__who b {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.note button:disabled {
+  opacity: 0.35;
+}
+/* ===== Account: end ===== */

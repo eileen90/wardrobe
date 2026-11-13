@@ -1,5 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { startCloud, touch } from './cloud';
 import * as db from './db';
+import { kindFromWords } from './kind';
 import { parsePrice } from './money';
 import type { Item, Look, Settings } from './types';
 import { MODELS } from './types';
@@ -9,11 +11,13 @@ interface State {
   items: Item[];
   looks: Look[];
   settings: Settings;
+  /** bumped when pictures arrive from the account, so pictures on screen look again */
+  pics: number;
 }
 
 const DEFAULT_SETTINGS: Settings = { key: '', model: MODELS[0].id, closetView: 'scatter', currency: 'TWD' };
 
-let state: State = { ready: false, items: [], looks: [], settings: DEFAULT_SETTINGS };
+let state: State = { ready: false, items: [], looks: [], settings: DEFAULT_SETTINGS, pics: 0 };
 const subs = new Set<() => void>();
 function set(p: Partial<State>) {
   state = { ...state, ...p };
@@ -37,6 +41,11 @@ function upgrade(i: Item): boolean {
   }
   if (i.kindSure === undefined) {
     i.kindSure = true;
+    changed = true;
+  }
+  // Socks were saved as accessories before they had a kind of their own.
+  if (i.category === 'extra' && kindFromWords(i.name) === 'socks') {
+    i.category = 'socks';
     changed = true;
   }
   // Anything caught mid-run by a closed tab goes back in the queue.
@@ -67,6 +76,8 @@ export async function load() {
   for (const i of dead) void purge(i.id);
   // Ask the browser not to evict the closet when storage runs low.
   void navigator.storage?.persist?.();
+  // Accounts, if set up: signs back in and syncs in the background.
+  void startCloud();
 }
 
 export const getItem = (id: string) => state.items.find((i) => i.id === id);
@@ -74,6 +85,7 @@ export const getItem = (id: string) => state.items.find((i) => i.id === id);
 export async function addItem(item: Item) {
   await db.putItem(item);
   set({ items: [item, ...state.items] });
+  touch('item', item.id);
 }
 export async function updateItem(id: string, patch: Partial<Item>) {
   const cur = getItem(id);
@@ -81,6 +93,7 @@ export async function updateItem(id: string, patch: Partial<Item>) {
   const next = { ...cur, ...patch };
   set({ items: state.items.map((i) => (i.id === id ? next : i)) });
   await db.putItem(next);
+  touch('item', id);
 }
 /**
  * Take a piece out of the closet. It disappears at once but is only really deleted the next
@@ -91,7 +104,7 @@ export function removeItem(id: string): () => void {
   if (!item) return () => {};
   const at = state.items.indexOf(item);
   set({ items: state.items.filter((i) => i.id !== id) });
-  void db.putItem({ ...item, gone: Date.now() });
+  void db.putItem({ ...item, gone: Date.now() }).then(() => touch('item', id));
   return () => {
     if (getItem(id)) return;
     const items = [...state.items];
@@ -99,7 +112,7 @@ export function removeItem(id: string): () => void {
     const back: Item = item.state === 'working' ? { ...item, state: 'queued' } : item;
     items.splice(Math.min(at, items.length), 0, back);
     set({ items });
-    void db.putItem(back);
+    void db.putItem(back).then(() => touch('item', id));
   };
 }
 
@@ -110,11 +123,12 @@ async function purge(id: string) {
   if (touched.length) {
     const fixed = new Map(touched.map((l) => [l.id, { ...l, pieces: l.pieces.filter((p) => p.itemId !== id) }]));
     set({ looks: state.looks.map((l) => fixed.get(l.id) ?? l) });
-    await Promise.all([...fixed.values()].map((l) => db.putLook(l)));
+    await Promise.all([...fixed.values()].map((l) => db.putLook(l).then(() => touch('look', l.id))));
   }
   await db.delItem(id);
   await db.delBlobs(id);
   dropUrls(id);
+  touch('item', id);
 }
 
 export async function saveLook(look: Look) {
@@ -122,16 +136,17 @@ export async function saveLook(look: Look) {
   const exists = state.looks.some((l) => l.id === look.id);
   set({ looks: exists ? state.looks.map((l) => (l.id === look.id ? next : l)) : [next, ...state.looks] });
   await db.putLook(next);
+  touch('look', look.id);
 }
 /** Delete a look. The returned function brings it back. */
 export function removeLook(id: string): () => void {
   const look = state.looks.find((l) => l.id === id);
   set({ looks: state.looks.filter((l) => l.id !== id) });
-  void db.delLook(id);
+  if (look) void db.delLook(id).then(() => touch('look', id));
   return () => {
     if (!look || state.looks.some((l) => l.id === id)) return;
     set({ looks: [look, ...state.looks].sort((a, b) => b.updatedAt - a.updatedAt) });
-    void db.putLook(look);
+    void db.putLook(look).then(() => touch('look', id));
   };
 }
 
@@ -139,6 +154,46 @@ export async function saveSettings(patch: Partial<Settings>) {
   const settings = { ...state.settings, ...patch };
   set({ settings });
   await db.setKV('settings', settings);
+}
+
+/* ---------- changes from the account ---------- */
+
+/** Pieces from the account: saved here and shown, without being sent back. */
+export async function applyRemoteItems(puts: Item[], dels: string[]) {
+  for (const i of puts) upgrade(i);
+  await Promise.all(puts.map((i) => db.putItem(i)));
+  for (const id of dels) {
+    await db.delItem(id);
+    await db.delBlobsQuiet(id);
+  }
+  const byId = new Map(puts.map((i) => [i.id, i]));
+  const gone = new Set(dels);
+  const items = state.items.filter((i) => !gone.has(i.id)).map((i) => byId.get(i.id) ?? i);
+  const known = new Set(items.map((i) => i.id));
+  const fresh = puts.filter((i) => !known.has(i.id));
+  if (fresh.length) items.push(...fresh), items.sort((a, b) => b.createdAt - a.createdAt);
+  for (const i of puts) if (state.items.find((x) => x.id === i.id)?.rev !== i.rev) dropUrls(i.id);
+  for (const id of dels) dropUrls(id);
+  set({ items });
+}
+
+/** Looks from the account, the same way. */
+export async function applyRemoteLooks(puts: Look[], dels: string[]) {
+  await Promise.all(puts.map((l) => db.putLook(l)));
+  await Promise.all(dels.map((id) => db.delLook(id)));
+  const byId = new Map(puts.map((l) => [l.id, l]));
+  const gone = new Set(dels);
+  const looks = state.looks.filter((l) => !gone.has(l.id)).map((l) => byId.get(l.id) ?? l);
+  const known = new Set(looks.map((l) => l.id));
+  looks.push(...puts.filter((l) => !known.has(l.id)));
+  looks.sort((a, b) => b.updatedAt - a.updatedAt);
+  set({ looks });
+}
+
+/** Pictures for a piece arrived after the piece itself. */
+export function picsLanded(id: string) {
+  dropUrls(id);
+  set({ pics: state.pics + 1 });
 }
 
 /* ---------- picture URLs ---------- */
@@ -174,6 +229,7 @@ export function usePic(item: Item | undefined, want: 'thumb' | 'full' = 'thumb')
   const id = item?.id;
   const rev = item?.rev;
   const st = item?.state;
+  const landed = useStore((s) => s.pics);
   useEffect(() => {
     let on = true;
     if (!item) return setUrl(null);
@@ -182,6 +238,6 @@ export function usePic(item: Item | undefined, want: 'thumb' | 'full' = 'thumb')
       on = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, rev, st, want]);
+  }, [id, rev, st, want, landed]);
   return url;
 }
