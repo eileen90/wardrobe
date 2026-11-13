@@ -24,7 +24,7 @@ export interface CanvasApi {
   toWorld: (sx: number, sy: number) => { x: number; y: number };
   el: () => HTMLDivElement | null;
 }
-export interface HudState { hover: boolean; selected: boolean; lifted: boolean }
+export interface HudState { hover: boolean; selected: boolean; lifted: boolean; /** some piece is under the pointer */ anyHover: boolean }
 
 const place = (b: Box) =>
   `translate3d(${(b.cx - b.w / 2).toFixed(2)}px, ${(b.cy - b.h / 2).toFixed(2)}px, 0) rotate(${b.rot.toFixed(2)}deg)`;
@@ -53,6 +53,8 @@ export function Canvas(props: {
   /** closest framing, and the zoom below which framing shows the top instead of everything */
   maxFitZ?: number;
   minFitZ?: number;
+  /** an area always framed along with the pieces, so one piece alone is not blown up */
+  frameAlso?: Rect;
   /** a sheet of paper under the pieces, at the world origin */
   paper?: { w: number; h: number; color: string };
   /** use the full-size pictures */
@@ -118,6 +120,7 @@ export function Canvas(props: {
     if (!w || !h) return;
     let r: Rect | null = bounds(P.pieces.map((p) => p.box));
     if (P.paper) r = union(r, { x0: 0, y0: 0, x1: P.paper.w, y1: P.paper.h });
+    if (P.frameAlso) r = union(r, P.frameAlso);
     if (!r) return;
     apply(frame(r, w, h, P.insets, P.maxFitZ ?? 1, P.minFitZ), smooth);
   };
@@ -142,7 +145,7 @@ export function Canvas(props: {
     const ro = new ResizeObserver(() => {
       const first = !size.current.w;
       size.current = { w: el.clientWidth, h: el.clientHeight };
-      if (first || !framed.current) { framed.current = live.current.pieces.length > 0 || !!live.current.paper; fit(); }
+      if (first || !framed.current) { framed.current = live.current.pieces.length > 0 || !!live.current.paper || !!live.current.frameAlso; fit(); }
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -151,7 +154,7 @@ export function Canvas(props: {
   const lastKey = useRef(props.fitKey);
   useLayoutEffect(() => {
     if (!size.current.w) return;
-    if (!framed.current && (pieces.length || props.paper)) { framed.current = true; fit(); return; }
+    if (!framed.current && (pieces.length || props.paper || props.frameAlso)) { framed.current = true; fit(); return; }
     if (lastKey.current !== props.fitKey) { lastKey.current = props.fitKey; fit(true); }
   });
 
@@ -371,7 +374,9 @@ export function Canvas(props: {
       // A trackpad pinch arrives as a wheel with ctrlKey set, on every browser.
       if (e.ctrlKey || e.metaKey) {
         const v = view.current;
-        apply(zoomAround(v, v.z * Math.exp(-e.deltaY * k * (e.ctrlKey ? 0.01 : 0.003)), e.clientX - r.left, e.clientY - r.top));
+        // A mouse wheel's notch is a big jump; a pinch sends many small ones.
+        const dy = Math.max(-40, Math.min(40, e.deltaY * k));
+        apply(zoomAround(v, v.z * Math.exp(-dy * 0.01), e.clientX - r.left, e.clientY - r.top));
       } else {
         apply({ ...view.current, x: view.current.x - e.deltaX * k, y: view.current.y - e.deltaY * k });
       }
@@ -410,7 +415,7 @@ export function Canvas(props: {
       if (isKey(e, 'fit')) { e.preventDefault(); fit(true); return; }
       if (!ids.length) return;
       if (isKey(e, 'close')) { e.preventDefault(); P.onSel(new Set()); return; }
-      const nudge = 10 / view.current.z;
+      const nudge = 6 / view.current.z;
       if (isKey(e, 'nudge')) {
         e.preventDefault();
         const d = { arrowleft: [-nudge, 0], arrowright: [nudge, 0], arrowup: [0, -nudge], arrowdown: [0, nudge] }[e.key.toLowerCase()];
@@ -477,7 +482,7 @@ export function Canvas(props: {
         <div className="canvas__hud">
           {pieces.map((p) => {
             const b = p.box;
-            const s: HudState = { hover: hover === p.id, selected: sel.has(p.id), lifted: lifted.includes(p.id) };
+            const s: HudState = { hover: hover === p.id, selected: sel.has(p.id), lifted: lifted.includes(p.id), anyHover: !!hover };
             const node = props.hud!(p, { x: (b.cx - b.w / 2) * v.z + v.x, y: (b.cy - b.h / 2) * v.z + v.y, w: b.w * v.z, h: b.h * v.z }, s);
             return node ? (
               <div key={p.id} data-hud onPointerEnter={() => hoverOn(p.id)} onPointerLeave={hoverOut}>{node}</div>

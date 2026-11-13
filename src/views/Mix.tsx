@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepLook, step } from '../lib/actions';
-import { boxOnBoard, fitBoard, flatLay, LAYER, LOOK_CM, newLook } from '../lib/boards';
+import { BH, boxOnBoard, BW, fitBoard, flatLay, LAYER, LOOK_CM, newLook } from '../lib/boards';
+import { bounds } from '../lib/canvas';
 import { realSize } from '../lib/kind';
 import { isKey } from '../lib/shortcuts';
 import { getState, saveSettings, useStore } from '../lib/store';
@@ -236,6 +237,10 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
   const missing = RAILS.filter((r) => pools[r.id].length && !worn.has(r.id) && !(r.id === 'bottom' && worn.get('top')?.category === 'dress'));
   const pickRail = picking && pools[picking].length ? RAIL[picking] : null;
   const top = 52 + 10 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--top')) || 0);
+  // The outfit is framed as if it were a whole outfit, so a single piece is not blown up.
+  const all = bounds(pieces.map((p) => p.box));
+  const cx = all ? (all.x0 + all.x1) / 2 : BW / 2, cy = all ? (all.y0 + all.y1) / 2 : BH / 2;
+  const room = { x0: cx - BW * 0.36, x1: cx + BW * 0.36, y0: cy - BH * 0.42, y1: cy + BH * 0.42 };
   const railsKey = [...worn.keys()].sort().join() + (pickRail ? '|pick' : '');
 
   return (
@@ -249,7 +254,8 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
         onSel={setSel}
         active={active}
         insets={{ top: top + 64, bottom: pickRail ? 270 : 104, left: 28, right: 28 }}
-        maxFitZ={2.4}
+        maxFitZ={2}
+        frameAlso={room}
         fitKey={railsKey}
         onOpen={(pid, rect) => { const r = railOf(pid); const p = pieces.find((x) => x.id === pid); if (r && p) onFocus(p.item.id, rect, pools[r].map((i) => i.id)); }}
         onMove={(ids, dx, dy, keyed) => edit('move', ids, { dx, dy }, keyed ? 'nudge:' + ids.join() : undefined)}
@@ -260,7 +266,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
           if (!r || s.lifted) return null;
           const kept = work.kept.includes(r);
           const n = pools[r].length;
-          const show = s.hover || s.selected || cur === r || picking === r;
+          const show = s.hover || s.selected || picking === r || (!s.anyHover && !sel.size && cur === r);
           if (!show) return kept ? <span className="hud__kept" style={{ left: at.x + at.w - 10, top: at.y - 6 }}><Lock shut /></span> : null;
           const midY = at.y + at.h / 2;
           return (
@@ -269,7 +275,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
                 onClick={() => { setCur(r); stepRail(r, -1); }}><Icon name="left" /></button>}
               {n > 1 && <button className="hud__arrow" style={{ left: at.x + at.w - 2, top: midY - 18 }} aria-label={`Next ${RAIL[r].label}`}
                 onClick={() => { setCur(r); stepRail(r, 1); }}><Icon name="right" /></button>}
-              <span className="hud__bar" style={{ left: at.x + at.w / 2, top: at.y - 8 }}>
+              <span className="hud__bar" style={{ left: at.x + at.w / 2, top: Math.max(at.y - 8, top + 96) }}>
                 <button className="hud__btn" aria-label={`All ${RAIL[r].title}`} aria-pressed={picking === r} onClick={() => { setCur(r); setPicking(picking === r ? null : r); }}><Icon name="grid" /></button>
                 <button className="hud__btn" aria-label={kept ? `Let go of this ${RAIL[r].label}` : `Keep this ${RAIL[r].label}`} aria-pressed={kept} onClick={() => keep(r)}><Lock shut={kept} /></button>
                 <button className="hud__btn" aria-label={`Take off the ${RAIL[r].label}`} onClick={() => clear([r])}><Icon name="x" /></button>

@@ -459,13 +459,13 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
             under={<>
               {target && (
                 <div className="drop" style={{
-                  transform: `translate(${target.rect.x0 - 40}px, ${target.rect.y0 - 40}px)`,
-                  width: target.rect.x1 - target.rect.x0 + 80, height: target.rect.y1 - target.rect.y0 + 80,
+                  transform: `translate(${target.rect.x0 - 28}px, ${target.rect.y0 - 24}px)`,
+                  width: target.rect.x1 - target.rect.x0 + 56, height: target.rect.y1 - target.rect.y0 + 52,
                 }} />
               )}
               {floor.clusters.map((c) => (
                 <div key={c.id} className={'clabel' + (target?.id === c.id ? ' is-target' : '')}
-                  style={{ transform: `translate(${c.rect.x0}px, ${c.rect.y0 - 30}px) translate(0, -100%)` }}>
+                  style={{ transform: `translate(${c.rect.x0}px, ${c.rect.y0 - 40}px) translate(0, -100%)` }}>
                   {c.name} · {c.n}
                 </div>
               ))}

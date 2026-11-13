@@ -79,20 +79,27 @@ const boxFor = (i: Item, cx: number, cy: number, cluster: string): FloorBox => {
 };
 const posOf = (i: Item, x: number, y: number, c: string): Pos => ({ ...(i.pos ?? {}), x: x / PX, y: y / PX, c });
 
-/** The first free spot in a cluster's lane, read like a page: left to right, then down. */
+/**
+ * Where a piece without a place goes: at the end of the last row of its cluster's lane, or at the
+ * start of a new row under it, so the lane always reads like a page.
+ */
 function freeSpot(it: Item, cluster: string, boxes: Iterable<FloorBox>) {
   const L = lane(cluster);
   const s = sizeOn(it);
-  const taken = [...boxes].map((b) => rectOf(b, GAP / 2));
-  const bottom = Math.max(0, ...taken.filter((r) => r.x1 > L.x0 && r.x0 < L.x1).map((r) => r.y1));
-  const x1 = Math.max(L.x0 + s.w / 2, L.x1 - s.w / 2);
-  for (let y = s.h / 2; y <= bottom + s.h / 2 + GAP; y += STEP) {
-    for (let x = L.x0 + s.w / 2; x <= x1 + 0.5; x += STEP) {
-      const r = rectOf({ cx: x, cy: y, w: s.w, h: s.h }, GAP / 2);
-      if (!taken.some((o) => hits(r, o))) return { x, y };
-    }
+  const all = [...boxes];
+  const taken = all.map((b) => rectOf(b, GAP / 2 - 1));
+  const free = (x: number, y: number) => !taken.some((o) => hits(rectOf({ cx: x, cy: y, w: s.w, h: s.h }, GAP / 2 - 1), o));
+  const own = readingOrder(all.filter((b) => b.cx >= L.x0 - AISLE / 2 && b.cx < L.x1 + AISLE / 2));
+  const bottom = Math.max(0, ...own.map((b) => b.cy + b.h / 2));
+  if (own.length) {
+    // The last row: the pieces level with the last one read.
+    const last = own[own.length - 1];
+    const row = own.filter((b) => Math.abs(b.cy - b.h / 2 - (last.cy - last.h / 2)) < Math.max(STEP, last.h / 2));
+    const top = Math.min(...row.map((b) => b.cy - b.h / 2));
+    const x = Math.max(...row.map((b) => b.cx + b.w / 2)) + GAP + s.w / 2;
+    for (let dx = 0; x + dx + s.w / 2 <= L.x1 + 1; dx += STEP) if (free(x + dx, top + s.h / 2)) return { x: x + dx, y: top + s.h / 2 };
   }
-  return { x: L.x0 + s.w / 2, y: bottom + GAP + s.h / 2 };
+  for (let y = own.length ? bottom + GAP + s.h / 2 : s.h / 2; ; y += STEP) if (free(L.x0 + s.w / 2, y)) return { x: L.x0 + s.w / 2, y };
 }
 
 /** Rail order for a piece at a spot: between its neighbours of the same kind, in reading order. */
