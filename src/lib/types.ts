@@ -95,6 +95,8 @@ export interface Settings {
   closetView: 'scatter' | 'grid';
   /** currency new prices start in: the one used last */
   currency: string;
+  /** model a redo uses; unset means REDO_MODEL */
+  redoModel?: string;
   /** shortcuts the owner rebound, by id (see shortcuts.ts) */
   shortcuts?: Record<string, string>;
 }

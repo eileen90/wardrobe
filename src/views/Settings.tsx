@@ -4,7 +4,7 @@ import { useCloud } from '../lib/cloud';
 import { TOP_UP_URL } from '../lib/pollinations';
 import { saveSettings, useStore } from '../lib/store';
 import { keyChanged, refreshCredits, resume, tryAgain, useStudio } from '../lib/studio';
-import { costOf, MODELS } from '../lib/types';
+import { costOf, MODELS, REDO_MODEL } from '../lib/types';
 import { toast } from '../ui';
 import { Account, ResetPassword } from './Account';
 
@@ -81,7 +81,7 @@ export function Settings({ hidden }: { hidden: boolean }) {
       </section>
 
       <section className="block">
-        <h2>Picture quality</h2>
+        <h2>New photos</h2>
         <div className="choices">
           {MODELS.map((m) => (
             <button key={m.id} className="choice" aria-pressed={settings.model === m.id}
@@ -89,6 +89,16 @@ export function Settings({ hidden }: { hidden: boolean }) {
               <span>{m.label}</span>
               <span className="small muted">{m.hint}</span>
             </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="block">
+        <h2>Redo</h2>
+        <div className="chips is-row">
+          {MODELS.map((m) => (
+            <button key={m.id} className="pill" aria-pressed={(settings.redoModel ?? REDO_MODEL) === m.id}
+              onClick={() => void saveSettings({ redoModel: m.id })}>{m.label}</button>
           ))}
         </div>
       </section>
