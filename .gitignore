@@ -3,3 +3,6 @@ dist
 dev-dist
 *.log
 .DS_Store
+
+# Claude Code local state and agent worktrees
+.claude/
