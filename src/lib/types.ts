@@ -57,8 +57,13 @@ export interface Item {
   from: 'photo' | 'web';
   /** bumped whenever the pictures change, so cached URLs refresh */
   rev: number;
-  /** where it was put on the floor, in floor cells from the middle; `t` orders the pile */
+  /** where the previous floor layout put it by hand; dropped on load (see store.ts) */
   spot?: { x: number; y: number; t: number };
+  /**
+   * Its place on the closet floor: centre in centimetres, the cluster it was put in (a piece whose
+   * kind changes is given a new place), and any resizing (s), flipping (f) or layering (z) by hand.
+   */
+  pos?: { x: number; y: number; c: string; s?: number; f?: boolean; z?: number };
   /** position inside its rail when the closet is lined up */
   order?: number;
   /** fingerprint of the picture file, so the same file isn't added twice */
@@ -77,7 +82,14 @@ export interface Placed {
   w: number;
   rot: number;
   flip: boolean;
+  /** on the looks page: the rail this piece is worn from */
+  rail?: string;
+  /** on the looks page: moved or resized by hand, so the outfit layout leaves it be */
+  byHand?: boolean;
 }
+
+/** The outfit on the looks page, kept between visits. */
+export interface WorkingLook { pieces: Placed[]; kept: string[]; wish: boolean }
 
 export interface Look {
   id: string;
@@ -99,6 +111,8 @@ export interface Settings {
   shortcuts?: Record<string, string>;
   /** the model "redo the picture" uses; REDO_MODEL when unset */
   redoModel?: string;
+  /** the outfit being put together on the looks page */
+  working?: WorkingLook;
 }
 
 /** Credits one remake costs with each model. */

@@ -48,6 +48,12 @@ function upgrade(i: Item): boolean {
     i.category = 'socks';
     changed = true;
   }
+  // Places set by hand on the floor before it had clusters left pieces stranded far from
+  // them. The floor now keeps its own places (`pos`); these are let go.
+  if (i.spot) {
+    delete i.spot;
+    changed = true;
+  }
   // Anything caught mid-run by a closed tab goes back in the queue.
   if (i.state === 'working') i.state = 'queued';
   // Earlier versions gave up on a photo when the studio was out of credits or unreachable.

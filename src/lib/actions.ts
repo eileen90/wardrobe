@@ -56,6 +56,37 @@ export async function keepLook(look: Look, label?: string) {
   }, { quiet: !label });
 }
 
+/* ---------- canvases ---------- */
+
+let lastStep = { key: '', at: 0 };
+/**
+ * Record one step, unless it continues a burst of the same change (arrow keys held down, a rail
+ * stepped through piece by piece): then the burst's first step already takes all of it back.
+ */
+export function step(label: string, undo: () => void | Promise<void>, { key, quiet = false }: { key?: string; quiet?: boolean } = {}) {
+  const now = Date.now();
+  if (key && lastStep.key === key && now - lastStep.at < 900) { lastStep.at = now; return; }
+  lastStep = { key: key ?? '', at: now };
+  record(label, undo, { quiet });
+}
+
+/** Change several pieces at once (places on the floor, kinds, order); one undo puts them all back. */
+export function arrange(patches: [string, Partial<Item>][], label: string, opts: { key?: string; quiet?: boolean } = {}) {
+  const befores: [string, Partial<Item>][] = [];
+  for (const [id, patch] of patches) {
+    const cur = getItem(id);
+    if (!cur) continue;
+    const before: Partial<Item> = {};
+    for (const k of Object.keys(patch) as (keyof Item)[]) (before as Record<string, unknown>)[k] = cur[k];
+    befores.push([id, before]);
+    void updateItem(id, patch);
+  }
+  if (!befores.length) return;
+  step(label, async () => {
+    for (const [id, before] of befores) await updateItem(id, before);
+  }, opts);
+}
+
 /* ---------- the studio ---------- */
 
 /** Pictures as they were before a redo, so the redo can be taken back. */

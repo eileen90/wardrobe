@@ -1,6 +1,71 @@
 import { realSize } from './kind';
 import { BOARD_RATIO, uid, type Category, type Item, type Look, type Placed } from './types';
 
+/* ---------- boards as canvases ---------- */
+
+/** A board in world units on a canvas: the paper is BW × BH, at the origin. */
+export const BW = 800;
+export const BH = BW / BOARD_RATIO;
+
+/** A placed piece as a box on the canvas (the stacking order is its place in the list). */
+export function boxOnBoard(p: Placed, item: Item, z: number) {
+  const w = p.w * BW;
+  return { cx: p.x * BW, cy: p.y * BH, w, h: w / (item.aspect || 1), rot: p.rot, z };
+}
+
+/* ---------- the outfit on the looks page: a flat lay at one real scale ---------- */
+
+/** Centimetres across the board's width; the looks page draws everything at this one scale. */
+export const LOOK_CM = 160;
+const LOOK_CM_H = LOOK_CM / BOARD_RATIO;
+
+/** Stacking from the floor up: a coat under the body, the top over the waistband. */
+export const LAYER = ['outer', 'bottom', 'top', 'socks', 'shoes', 'bag', 'extra'];
+
+/**
+ * Lay an outfit out like a flat lay, every piece at its true size: the top hangs from the
+ * shoulders over the waistband, the shoes lie under the hem, a coat lies beside the body,
+ * aligned to the shoulders and overlapping it a little, a bag and an accessory on the other side.
+ * Returns placements (centred on the board) by rail, in stacking order.
+ */
+export function flatLay(picks: { rail: string; item: Item }[]): { rail: string; x: number; y: number; w: number }[] {
+  const by = (r: string) => picks.find((p) => p.rail === r)?.item;
+  const size = (i?: Item) => (i ? realSize(i) : null);
+  const top = by('top'), bottom = by('bottom'), outer = by('outer');
+  const isDress = top?.category === 'dress';
+  const T = size(top), B = isDress ? null : size(bottom), O = size(outer);
+  const S = size(by('shoes')), K = size(by('socks')), E = size(by('extra')), G = size(by('bag'));
+  const cm = new Map<string, { cx: number; cy: number; w: number; h: number }>();
+  // The shoulders are at y = 0, the middle of the body at x = 0.
+  if (T) cm.set('top', { cx: 0, cy: T.h / 2, w: T.w, h: T.h });
+  const waist = T && !isDress ? Math.min(50, Math.max(34, T.h - 14)) : 0;
+  if (B) cm.set('bottom', { cx: 0, cy: waist + B.h / 2, w: B.w, h: B.h });
+  const hem = B ? waist + B.h : T ? T.h : 0;
+  // The body's width: a top's sleeves spread wider than the body, so they count for less.
+  const half = Math.max(T ? T.w * 0.42 : 0, B ? B.w / 2 : 0, 20);
+  if (S) cm.set('shoes', { cx: K ? S.w * 0.25 : 0, cy: hem + 6 + S.h / 2, w: S.w, h: S.h });
+  if (K) {
+    const s = cm.get('shoes');
+    cm.set('socks', s ? { cx: s.cx - s.w / 2 - 4 - K.w / 2, cy: hem + 6 + K.h / 2, w: K.w, h: K.h } : { cx: 0, cy: hem + 6 + K.h / 2, w: K.w, h: K.h });
+  }
+  if (O) cm.set('outer', { cx: -half + 6 - O.w / 2, cy: O.h / 2, w: O.w, h: O.h });
+  if (E) cm.set('extra', { cx: half + 8 + E.w / 2, cy: E.h / 2, w: E.w, h: E.h });
+  if (G) {
+    const y0 = E ? Math.max(E.h + 8, waist - 6) : Math.max(0, waist - 6);
+    cm.set('bag', { cx: half + 8 + G.w / 2, cy: y0 + G.h / 2, w: G.w, h: G.h });
+  }
+  // Centred on the board.
+  const all = [...cm.values()];
+  if (!all.length) return [];
+  const x0 = Math.min(...all.map((b) => b.cx - b.w / 2)), x1 = Math.max(...all.map((b) => b.cx + b.w / 2));
+  const y0 = Math.min(...all.map((b) => b.cy - b.h / 2)), y1 = Math.max(...all.map((b) => b.cy + b.h / 2));
+  const ox = LOOK_CM / 2 - (x0 + x1) / 2, oy = LOOK_CM_H / 2 - (y0 + y1) / 2;
+  return LAYER.flatMap((r) => {
+    const b = cm.get(r);
+    return b ? [{ rail: r, x: (b.cx + ox) / LOOK_CM, y: (b.cy + oy) / LOOK_CM_H, w: b.w / LOOK_CM }] : [];
+  });
+}
+
 export function newLook(n: number, pieces: Placed[] = []): Look {
   return {
     id: uid(), name: `Look ${String(n + 1).padStart(2, '0')}`, createdAt: Date.now(), updatedAt: Date.now(),

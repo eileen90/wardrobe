@@ -34,6 +34,7 @@ const PATHS: Record<string, string> = {
   fit: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5M9 9h6v6H9z',
   tidy: 'M4 7h16M4 12h16M4 17h10',
   check: 'M5 12.5l4.5 4.5L19 7.5',
+  looks: 'M4 4h11v15H4zM9 8v12h11V8h-3',
 };
 
 export function Icon({ name, box = '0 0 24 24' }: { name: keyof typeof PATHS | string; box?: string }) {

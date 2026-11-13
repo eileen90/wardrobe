@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { stopStudio } from './lib/actions';
 import { undoLast, useLastStep } from './lib/history';
 import { cancelFetching, takeTransfer } from './lib/intake';
+import { isKey } from './lib/shortcuts';
 import { load, useStore } from './lib/store';
 import { resume, tryAgain, useStudio } from './lib/studio';
 import { dismissToast, Icon, Toast, useToasting } from './ui';
@@ -59,10 +60,10 @@ export function App() {
       e.preventDefault();
       void takeTransfer(e.dataTransfer).then(tell);
     };
-    // ⌘Z / Ctrl+Z takes back the last thing done, anywhere a board isn't open (boards keep their own).
+    // Undo takes back the last thing done, wherever it was done.
     const key = (e: KeyboardEvent) => {
       if (typing(e.target) || e.defaultPrevented) return;
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !document.querySelector('.board')) {
+      if (isKey(e, 'undo')) {
         e.preventDefault();
         void undoLast();
       }
@@ -86,6 +87,7 @@ export function App() {
   if (!ready) return <div className="app" />;
 
   const covered = !!focus || !!board;
+  const openFocus = (id: string, from: DOMRect, sequence: string[]) => setFocus({ id, from, sequence });
   const openBoard = (id: string) => { dismissToast(); setToLook(null); setFocus(null); setTab('looks'); setBoard(id); };
 
   // One quiet line about what the studio is up to. Nothing here needs doing, except a bad key.
@@ -119,10 +121,10 @@ export function App() {
           onClick={() => setTab('settings')}><Icon name="gear" /></button>
       </nav>
 
-      <Closet hidden={tab !== 'closet'} onAdd={() => setAdding(true)}
-        onOpen={(id, from, sequence) => setFocus({ id, from, sequence })} />
+      <Closet hidden={tab !== 'closet'} active={tab === 'closet' && !covered && !adding} onAdd={() => setAdding(true)}
+        onOpen={openFocus} />
       <Looks hidden={tab !== 'looks'} active={tab === 'looks' && !covered && !adding && !toLook}
-        startWith={mixWith} onOpen={openBoard} onAdd={() => setAdding(true)} />
+        startWith={mixWith} onOpen={openBoard} onFocus={openFocus} onAdd={() => setAdding(true)} />
       <Settings hidden={tab !== 'settings'} />
 
       {!covered && !toasting && tab !== 'settings' && line && quiet !== line.text && (
@@ -134,6 +136,7 @@ export function App() {
         </div>
       )}
 
+      {board && <Board key={board} id={board} onClose={() => setBoard(null)} onFocus={openFocus} />}
       {focus && (
         <Focus
           id={focus.id}
@@ -141,11 +144,10 @@ export function App() {
           sequence={focus.sequence}
           onGo={(id) => setFocus({ ...focus, id })}
           onClose={() => setFocus(null)}
-          onMix={(id) => { setFocus(null); setMixWith(id); setTab('looks'); }}
+          onMix={(id) => { setFocus(null); setBoard(null); setMixWith(id); setTab('looks'); }}
           onAddToLook={(id) => setToLook(id)}
         />
       )}
-      {board && <Board key={board} id={board} onClose={() => setBoard(null)} />}
 
       <Add open={adding} onClose={() => setAdding(false)} />
       <PickLook itemId={toLook} onClose={() => setToLook(null)} onOpen={openBoard} />
