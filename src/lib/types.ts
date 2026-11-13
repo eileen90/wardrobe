@@ -95,6 +95,8 @@ export interface Settings {
   closetView: 'scatter' | 'grid';
   /** currency new prices start in: the one used last */
   currency: string;
+  /** shortcuts the owner rebound, by id (see shortcuts.ts) */
+  shortcuts?: Record<string, string>;
 }
 
 /** Credits one remake costs with each model. */
