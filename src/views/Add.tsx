@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { report, takeFiles, takeLink, takeTransfer, type Taken } from '../lib/intake';
 import { cleanUrl } from '../lib/links';
-import { isDone } from '../lib/shortcuts';
+import { describe, isDone } from '../lib/shortcuts';
 import { Icon, Sheet, toast } from '../ui';
 
 /** Say what happened to something that was handed over, when it needs saying. */
@@ -60,7 +60,7 @@ export function Add({ open, onClose }: { open: boolean; onClose: () => void }) {
             onKeyDown={(e) => isDone(e) && link.trim() && send(link)} />
         </label>
       </div>
-      {!touch && <p className="note">Or drop pictures anywhere in the window, or paste with {/Mac|iP/.test(navigator.platform) ? '⌘' : 'Ctrl+'}V.</p>}
+      {!touch && <p className="note">Or drop pictures anywhere in the window, or paste with {describe('mod+v')}.</p>}
     </Sheet>
   );
 }

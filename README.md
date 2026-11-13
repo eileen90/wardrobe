@@ -9,8 +9,9 @@ size, to mix into outfits.
 
 - **Closet**: scattered on the floor or lined up by kind. Drag pieces wherever you like; in the
   rails, dragging reorders them or moves a piece to another kind.
-- **Looks**: the mixer on top (swipe the rails, or use the arrow keys) and the saved looks under
-  it. A saved look opens as a free board: drag, resize, turn, layer, share as a picture.
+- **Looks**: an outfit laid out at true size. Step through each kind with the arrows beside a
+  piece (or the arrow keys), keep what you like, shuffle the rest and save it. A saved look opens
+  as a free board: drag, resize, layer, flip, share as a picture.
 - **Private**: everything lives in the browser first and works offline. An optional account
   (*Settings → Account*) keeps the same closet on the phone and the laptop; *Settings → Backup*
   saves it all to one file.
@@ -81,10 +82,13 @@ supabase.com wakes it.
 
 | Where | Keys |
 | --- | --- |
-| Anywhere | paste a picture or a link to add it |
-| A piece | ← → previous / next, Delete removes (with undo), Esc closes |
-| Mixer | ↑ ↓ pick a rail, ← → change it (or everything not kept), L keep, ⌫ clear, Enter all pieces of that kind, Space shuffle, S save |
-| Board | Delete removes the selected piece, arrows nudge, ⌘Z undo, ⌘D copy, [ ] layer, + − size, F flip |
+| Anywhere | paste a picture or a link to add it, ⌘Z undo, ⌫ remove (with undo), Esc close or clear, F12 all shortcuts |
+| Closet and looks | ⌘ click select, ⇧ click select a range, ⌘A select all, ⌥ drag resize, ⌘ scroll or pinch to zoom, 0 fit everything |
+| Pieces selected | arrows nudge, = − size, ] [ layer, F flip, ⌘D copy (on a saved look) |
+| Looks page | ↑ ↓ pick a kind, ← → change it (or everything not kept), L keep, ↩ all of that kind, Space shuffle, S save |
+| A piece | ← → previous / next |
+
+Every one of them can be changed in *Settings → Shortcuts*. On Windows and Linux ⌘ is Ctrl and ⌥ is Alt.
 
 ## Run it
 

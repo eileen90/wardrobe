@@ -6,9 +6,24 @@ import { isDone } from '../lib/shortcuts';
 import { saveSettings, useStore } from '../lib/store';
 import { keyChanged, refreshCredits, resume, tryAgain, useStudio } from '../lib/studio';
 import { costOf, MODELS, REDO_MODEL } from '../lib/types';
+import { record } from '../lib/history';
 import { toast } from '../ui';
 import { Account, ResetPassword } from './Account';
 import { ShortcutList } from './Shortcuts';
+
+/** Which image model to use: the same choice for new photos and for a redo. */
+function ModelChoice({ value, onPick }: { value: string; onPick: (id: string) => void }) {
+  return (
+    <>
+      <div className="chips">
+        {MODELS.map((m) => (
+          <button key={m.id} className="pill" aria-pressed={value === m.id} onClick={() => onPick(m.id)}>{m.label}</button>
+        ))}
+      </div>
+      <p className="note">{MODELS.find((m) => m.id === value)?.hint}</p>
+    </>
+  );
+}
 
 /** A phone without a keyboard has no use for shortcuts. */
 const touchOnly = matchMedia('(hover: none) and (pointer: coarse)').matches;
@@ -87,25 +102,12 @@ export function Settings({ hidden }: { hidden: boolean }) {
 
       <section className="block">
         <h2>New photos</h2>
-        <div className="choices">
-          {MODELS.map((m) => (
-            <button key={m.id} className="choice" aria-pressed={settings.model === m.id}
-              onClick={() => void saveSettings({ model: m.id }).then(tryAgain)}>
-              <span>{m.label}</span>
-              <span className="small muted">{m.hint}</span>
-            </button>
-          ))}
-        </div>
+        <ModelChoice value={settings.model} onPick={(model) => void saveSettings({ model }).then(tryAgain)} />
       </section>
 
       <section className="block">
         <h2>Redo</h2>
-        <div className="chips is-row">
-          {MODELS.map((m) => (
-            <button key={m.id} className="pill" aria-pressed={(settings.redoModel ?? REDO_MODEL) === m.id}
-              onClick={() => void saveSettings({ redoModel: m.id })}>{m.label}</button>
-          ))}
-        </div>
+        <ModelChoice value={settings.redoModel ?? REDO_MODEL} onPick={(redoModel) => void saveSettings({ redoModel })} />
       </section>
 
       {!touchOnly && (
@@ -136,14 +138,15 @@ export function Settings({ hidden }: { hidden: boolean }) {
             const f = e.target.files?.[0];
             e.target.value = '';
             if (!f) return;
-            if (items.length && !confirm(account
-              ? 'Restoring replaces everything in the closet now, on every device signed in to this account. Continue?'
-              : 'Restoring replaces everything in the closet now. Continue?')) return;
             setWorking(true);
             try {
+              // Restoring replaces everything at once; Undo puts back what was here.
+              const before = items.length ? await makeBackup() : null;
               const n = await restoreBackup(f);
               resume();
-              toast(`Restored ${n} ${n === 1 ? 'piece' : 'pieces'}`);
+              const said = `Restored ${n} ${n === 1 ? 'piece' : 'pieces'}`;
+              if (before) record(said, async () => { await restoreBackup(before); resume(); });
+              else toast(said);
             } catch (err) {
               toast(err instanceof Error ? err.message : "Couldn't restore that file.");
             } finally {

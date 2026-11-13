@@ -8,6 +8,7 @@ import { removeLook, saveLook, useStore } from '../lib/store';
 import { CATEGORIES, PAPERS, uid, type Category, type Item, type Look, type Placed } from '../lib/types';
 import { Garment, Icon, Sheet, toast } from '../ui';
 import { Canvas, type CanvasAction, type CanvasApi, type CanvasPiece } from './Canvas';
+import { ArrangeSelection } from './Selection';
 
 /**
  * Change a look's pieces as one step in the history. Shared by saved boards and the looks page,
@@ -55,27 +56,30 @@ export function Board({ id, onClose, onFocus }: {
   live.current = look;
   useEffect(() => { setName(look?.name ?? ''); }, [look?.name]);
 
-  const commit = (next: Look, label: string, key?: string) => {
+  const commit = (next: Look, label: string, { key, quiet }: { key?: string; quiet?: boolean } = {}) => {
     const before = live.current;
     if (!before) return;
     live.current = next;
     void saveLook(next);
-    step(label, () => void saveLook(before), { key });
+    step(label, () => void saveLook(before), { key, quiet });
   };
   const edit = (a: CanvasAction | 'move' | 'resize', ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}, key?: string) => {
     const cur = live.current;
     if (!cur) return;
     const pieces = editPieces(cur.pieces, a, ids, arg);
     if (!pieces) return;
-    commit({ ...cur, pieces }, LABELS[a], key);
+    commit({ ...cur, pieces }, LABELS[a], { key });
     if (a === 'remove') setSel(new Set());
     if (a === 'duplicate') setSel(new Set(pieces.slice(cur.pieces.length).map((p) => p.id)));
   };
 
+  const [leaving, setLeaving] = useState(false);
   const close = () => {
+    if (leaving) return;
     // A board nobody put anything on isn't worth keeping.
     if (live.current && !live.current.pieces.length) removeLook(live.current.id);
-    onClose();
+    setLeaving(true);
+    setTimeout(onClose, 200);
   };
   const keys = useRef<(e: KeyboardEvent) => void>(() => {});
   keys.current = (e) => {
@@ -142,13 +146,15 @@ export function Board({ id, onClose, onFocus }: {
   })();
 
   return (
-    <div className="board" role="dialog" aria-modal="true" aria-label={look.name || 'Board'}>
+    <div className={'board' + (leaving ? ' is-leaving' : '')} role="dialog" aria-modal="true" aria-label={look.name || 'Board'}>
       <div className="board__top">
-        <button className="iconbtn" onClick={close} aria-label="Back to looks"><Icon name="back" /></button>
+        <button className="iconbtn" onClick={close} aria-label="Back"><Icon name="back" /></button>
         <input className="board__name" value={name} placeholder="Name this look" enterKeyHint="done"
           onChange={(e) => setName(e.target.value)}
-          onBlur={() => { if (live.current && name !== live.current.name) commit({ ...live.current, name }, 'Renamed'); }}
+          onBlur={() => { if (live.current && name !== live.current.name) commit({ ...live.current, name }, 'Renamed', { quiet: true }); }}
           onKeyDown={(e) => isDone(e) && e.currentTarget.blur()} />
+        <button className="iconbtn" aria-label="Fit everything" title={`Fit everything (${hint('fit')})`}
+          onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
         <button className="iconbtn" onClick={() => void undoLast()} disabled={!lastStep} aria-label="Undo"
           title={lastStep ? `Undo: ${lastStep} (${hint('undo')})` : undefined}><Icon name="undo" /></button>
         <button className="iconbtn" disabled={!look.pieces.length} aria-label="Share as a picture" onClick={async () => {
@@ -160,7 +166,6 @@ export function Board({ id, onClose, onFocus }: {
 
       <div className="board__mid">
         <Canvas
-          className="is-board"
           api={api}
           full
           pieces={pieces}
@@ -182,11 +187,16 @@ export function Board({ id, onClose, onFocus }: {
         </Canvas>
       </div>
 
+      {sel.size > 0 && (
+        <ArrangeSelection n={sel.size} total={pieces.length} copy onAll={() => setSel(new Set(pieces.map((p) => p.id)))}
+          onClear={() => setSel(new Set())} onAction={(a) => edit(a, [...sel])} />
+      )}
+
       <div className="drawer">
         <div className="chips is-row">
-          <button className="pill" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>everything</button>
+          <button className="pill is-small" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>everything</button>
           {cats.map((c) => (
-            <button key={c.id} className="pill" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>{c.plural}</button>
+            <button key={c.id} className="pill is-small" aria-pressed={cat === c.id} onClick={() => setCat(c.id)}>{c.plural}</button>
           ))}
         </div>
         <div className="drawer__strip">
@@ -199,7 +209,7 @@ export function Board({ id, onClose, onFocus }: {
               {i.status === 'wish' && <span className="tag">wishlist</span>}
             </button>
           ))}
-          {!pool.length && <span className="small muted" style={{ padding: '30px 14px' }}>No cleaned pieces here yet.</span>}
+          {!pool.length && <span className="drawer__none small muted">No cleaned pieces here yet.</span>}
         </div>
       </div>
 
@@ -213,7 +223,7 @@ export function Board({ id, onClose, onFocus }: {
         </div>
         <div className="rowbtns">
           <button className="pill" onClick={() => { deleteLook(look.id); onClose(); }}>
-            <Icon name="bin" />delete this look
+            <Icon name="bin" />remove this look
           </button>
         </div>
       </Sheet>

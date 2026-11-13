@@ -10,6 +10,7 @@ import { Icon, Mark, toast } from '../ui';
 import { Canvas, type CanvasApi, type CanvasPiece } from './Canvas';
 import { editPieces, LABELS } from './Board';
 import { Lock, RailPicker } from './RailPicker';
+import { ArrangeSelection } from './Selection';
 
 /** The rails an outfit is built from. Tops and dresses share one. */
 const RAILS = [
@@ -58,7 +59,8 @@ function rebuild(picks: Map<RailId, Item>, prev: Placed[], items: Item[]): Place
 
 /** The looks page: the outfit being put together, on the same canvas as a saved board. */
 export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
-  startWith: string | null;
+  /** a piece to put on (a new object each time, so the same piece can be put on again) */
+  startWith: { id: string } | null;
   /** true while this is what the keyboard is talking to */
   active: boolean;
   onSaved: (lookId: string) => void;
@@ -117,12 +119,12 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
   // Opened from a piece: put it on its rail.
   useEffect(() => {
     if (!startWith) return;
-    const it = items.find((i) => i.id === startWith);
+    const it = items.find((i) => i.id === startWith.id);
     const rail = it && RAILS.find((r) => r.cats.includes(it.category));
     if (!it || !rail) return;
     const picks = new Map(worn);
     picks.set(rail.id, it);
-    wear(picks, 'Put on');
+    wear(picks, `Put on the ${rail.label}`);
     if (it.status === 'wish' && !work.wish) void saveSettings({ working: { ...(getState().settings.working ?? EMPTY), wish: true } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startWith]);
@@ -167,7 +169,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
   const add = (r: RailId) => {
     const picks = new Map(worn);
     picks.set(r, pools[r][0]);
-    wear(picks, `Added a ${RAIL[r].label}`);
+    wear(picks, `Put on the ${RAIL[r].label}`);
     setCur(r);
   };
   const save = async () => {
@@ -175,7 +177,7 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
     if (!pieces.length) return;
     const look = newLook(nLooks, fitBoard(pieces, items, 1.4));
     await keepLook(look);
-    toast('Saved', { label: 'Open', run: () => onSaved(look.id) });
+    toast('Look saved', { label: 'Open', run: () => onSaved(look.id) });
   };
 
   const railOf = (pid: string) => work.pieces.find((p) => p.id === pid)?.rail as RailId | undefined;
@@ -244,9 +246,8 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
   const railsKey = [...worn.keys()].sort().join() + (pickRail ? '|pick' : '');
 
   return (
-    <div className={'mix' + (pickRail ? ' is-picking' : '')}>
+    <div className="mix">
       <Canvas
-        className="is-look"
         api={api}
         full
         pieces={pieces}
@@ -286,11 +287,11 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
         onEmpty={() => { setCur(null); setPicking(null); }}
       >
         <div className="mix__layers">
-          <button className={'pill' + (work.wish ? ' is-on' : '')} aria-pressed={work.wish}
+          <button className="pill is-small" aria-pressed={work.wish}
             onClick={() => set({ ...work, wish: !work.wish }, work.wish ? 'Wishlist hidden' : 'Wishlist shown', { quiet: true })}>wishlist</button>
-          {work.kept.length > 0 && <button className="pill" onClick={() => set({ ...work, kept: [] }, 'Let go')}><Lock shut={false} />let go</button>}
+          {work.kept.length > 0 && <button className="pill is-small" onClick={() => set({ ...work, kept: [] }, 'Let go')}><Lock shut={false} />let go</button>}
           {missing.map((r) => (
-            <button key={r.id} className="pill is-add" onClick={() => add(r.id)} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>
+            <button key={r.id} className="pill is-small is-add" onClick={() => add(r.id)} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>
           ))}
         </div>
       </Canvas>
@@ -309,11 +310,15 @@ export function Mix({ startWith, active, onSaved, onFocus, onAdd, children }: {
         />
       )}
 
-      <div className="mix__dock">
+      {sel.size > 0 && (
+        <ArrangeSelection n={sel.size} total={pieces.length} onAll={() => setSel(new Set(pieces.map((p) => p.id)))}
+          onClear={() => setSel(new Set())} onAction={(a) => edit(a, [...sel].filter((id) => pieces.some((p) => p.id === id)))} />
+      )}
+      <div className={'dock' + (sel.size ? ' is-away' : '')}>
         {children}
         <button className="round glass" aria-label="Shuffle" title={`Shuffle (${hint('shuffle')})`} onClick={shuffle}><Icon name="shuffle" /></button>
         <button className="go" onClick={save} disabled={!pieces.length} title={hint('save')}>Save this look</button>
-        <button className="round glass is-quiet" aria-label="Fit everything" title={`Fit everything (${hint('fit')})`} onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
+        <button className="round glass" aria-label="Fit everything" title={`Fit everything (${hint('fit')})`} onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
       </div>
     </div>
   );

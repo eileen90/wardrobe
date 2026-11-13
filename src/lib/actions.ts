@@ -43,7 +43,7 @@ export function editPiece(id: string, patch: Partial<Item>, { label = 'Edit', to
 
 export function deleteLook(id: string) {
   const undo = removeLook(id);
-  record('Look deleted', undo);
+  record('Look removed', undo);
 }
 
 /** Save a look; undo puts back what it was before, or removes it if it is new. */
@@ -138,7 +138,7 @@ export function removeMany(ids: string[]) {
     undos.push(removeItem(id));
   }
   if (!undos.length) return;
-  record(`Removed ${undos.length}`, () => {
+  record(undos.length === 1 ? 'Removed' : `Removed ${undos.length}`, () => {
     undos.forEach((u) => u());
     resume();
   });

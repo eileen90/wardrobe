@@ -11,7 +11,7 @@ import { saveSettings, updateItem, useStore } from '../lib/store';
 import { CATEGORIES, catPlural, type Category, type Item } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, useViewport } from '../ui';
 import { Canvas, type CanvasAction, type CanvasApi, type CanvasPiece } from './Canvas';
-import { SelectionBar } from './Selection';
+import { ClosetSelection } from './Selection';
 
 export interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
 
@@ -439,7 +439,6 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
           <Rails shown={shown} items={items} floor={floor} sel={sel} setSel={setSel} order={order} onOpen={onOpen} sequence={order} />
         ) : (
           <Canvas
-            className="is-floor"
             api={api}
             pieces={pieces}
             sel={sel}
@@ -475,12 +474,12 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
         {!shown.length && (
           <div className="empty" style={{ position: 'fixed' }}>
             <p>Nothing matches these filters.</p>
-            <button className="pill" onClick={() => setFilters({ status: 'all', cats: [] })}>Show everything</button>
+            <button className="pill" onClick={() => setFilters({ status: 'all', cats: [] })}>clear filters</button>
           </div>
         )}
       </div>
 
-      {sel.size > 0 && <SelectionBar ids={[...sel]} total={shown.length} onAll={() => setSel(new Set(shown.map((i) => i.id)))} onClear={() => setSel(new Set())} />}
+      {sel.size > 0 && <ClosetSelection ids={[...sel]} total={shown.length} onAll={() => setSel(new Set(shown.map((i) => i.id)))} onClear={() => setSel(new Set())} />}
 
       <div className={'dock' + (hidden || sel.size ? ' is-away' : '')}>
         <button className="round glass" aria-label={mode === 'grid' ? 'Scatter the pieces' : 'Line the pieces up'}
@@ -488,11 +487,11 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
           <Icon name={mode === 'grid' ? 'scatter' : 'grid'} />
         </button>
         {mode !== 'grid' && (
-          <button className="round glass is-quiet" aria-label="Tidy up" title="Tidy up" onClick={tidy}><Icon name="tidy" /></button>
+          <button className="round glass" aria-label="Tidy up" title="Tidy up" onClick={tidy}><Icon name="tidy" /></button>
         )}
         <button className="go" onClick={onAdd}><Icon name="plus" />Add</button>
         {mode !== 'grid' && (
-          <button className="round glass is-quiet" aria-label="Fit everything" title={`Fit everything (${hint('fit')})`} onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
+          <button className="round glass" aria-label="Fit everything" title={`Fit everything (${hint('fit')})`} onClick={() => api.current?.fit(true)}><Icon name="fit" /></button>
         )}
         <button className="round glass" aria-label="Filter" onClick={() => setFilterOpen(true)}>
           <Icon name="filter" />{nActive > 0 && <span className="dot">{nActive}</span>}
@@ -502,10 +501,10 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
       <Sheet open={filterOpen} onClose={() => setFilterOpen(false)} label="Filter">
         <div className="sheet__head">
           <h2>Filter</h2>
-          {nActive > 0 && <button className="small link" onClick={() => setFilters({ status: 'all', cats: [] })}>Clear</button>}
+          {nActive > 0 && <button className="small link" onClick={() => setFilters({ status: 'all', cats: [] })}>clear filters</button>}
         </div>
         <div className="chips">
-          {([['all', 'Everything'], ['owned', 'Mine'], ['wish', 'Wishlist']] as const).map(([id, label]) => (
+          {([['all', 'everything'], ['owned', 'mine'], ['wish', 'wishlist']] as const).map(([id, label]) => (
             <button key={id} className="pill" aria-pressed={filters.status === id} onClick={() => setFilters({ ...filters, status: id })}>{label}</button>
           ))}
         </div>

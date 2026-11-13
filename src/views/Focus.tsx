@@ -54,7 +54,7 @@ function Price({ item }: { item: Item }) {
       {choosing && (
         <div className="chips">
           {CURRENCIES.map((c) => (
-            <button key={c.code} className="pill" aria-pressed={c.code === item.currency} onClick={() => setCurrency(c.code)}>
+            <button key={c.code} className="pill is-small" aria-pressed={c.code === item.currency} onClick={() => setCurrency(c.code)}>
               {c.sign}<span style={{ opacity: 0.55 }}>{c.code}</span>
             </button>
           ))}
@@ -78,7 +78,7 @@ function LinkField({ item }: { item: Item }) {
   if (item.url) {
     return (
       <div className="linkchip">
-        <a className="pill" href={item.url} target="_blank" rel="noreferrer">{siteOf(item.url)}<Icon name="out" /></a>
+        <a className="pill is-small" href={item.url} target="_blank" rel="noreferrer">{siteOf(item.url)}<Icon name="out" /></a>
         <button className="iconbtn is-small" aria-label="Remove the link"
           onClick={() => { editPiece(item.id, { url: '' }, { label: 'Link removed', toast: true }); setTimeout(() => input.current?.focus(), 0); }}>
           <Icon name="x" />
@@ -96,14 +96,14 @@ function LinkField({ item }: { item: Item }) {
   );
 }
 
-export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }: {
+export function Focus({ id, from, sequence, onGo, onClose, onWear, onAddToLook }: {
   id: string;
   from: DOMRect | null;
   /** the pieces around this one, in the order the closet shows them */
   sequence: string[];
   onGo: (id: string) => void;
   onClose: () => void;
-  onMix: (id: string) => void;
+  onWear: (id: string) => void;
   onAddToLook: (id: string) => void;
 }) {
   const item = useStore((s) => s.items.find((i) => i.id === id));
@@ -186,7 +186,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
 
   return (
     <div className={'focus' + (leaving ? ' is-leaving' : '')} role="dialog" aria-modal="true" aria-label={item.name || 'Piece'}>
-      <button className="close" onClick={close} aria-label="Close"><Icon name="x" /></button>
+      <button className="iconbtn back" onClick={close} aria-label="Back"><Icon name="back" /></button>
 
       <div className="focus__stage"
         onPointerDown={(e) => { swipe.current = { x: e.clientX, y: e.clientY }; }}
@@ -210,7 +210,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
 
           {item.problem && item.state === 'raw' && <p className="problem">{item.problem}</p>}
 
-          <div className="chips is-row">
+          <div className="chips">
             {CATEGORIES.map((c) => (
               <button key={c.id} className="pill" aria-pressed={item.category === c.id}
                 onClick={() => save({ category: c.id, kindSure: true, kindByHand: true }, `Moved to ${c.plural}`)}>{c.label}</button>
@@ -222,7 +222,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
               <span>It is</span>
               <div className="seg" role="group">
                 <button aria-pressed={item.status === 'owned'} onClick={() => save({ status: 'owned' }, 'Marked as mine')}>mine</button>
-                <button aria-pressed={item.status === 'wish'} onClick={() => save({ status: 'wish' }, 'On the wishlist')}>on my wishlist</button>
+                <button aria-pressed={item.status === 'wish'} onClick={() => save({ status: 'wish' }, 'On the wishlist')}>wishlist</button>
               </div>
             </div>
             <div className="line">
@@ -245,7 +245,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onMix, onAddToLook }:
 
           <div className="slip__acts">
             <button className="pill is-on" onClick={() => onAddToLook(item.id)}>add to a look</button>
-            <button className="pill" disabled={item.state !== 'ready'} onClick={() => onMix(item.id)}>mix with it</button>
+            <button className="pill" disabled={item.state !== 'ready'} onClick={() => onWear(item.id)}>put it on</button>
             {hasKey && !waiting && (
               <button className="pill" onClick={() => void redoPiece(item.id)}>
                 <Icon name="turn" />redo the picture

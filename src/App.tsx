@@ -31,7 +31,7 @@ export function App() {
   const [focus, setFocus] = useState<{ id: string; from: DOMRect | null; sequence: string[] } | null>(null);
   const [adding, setAdding] = useState(false);
   const [board, setBoard] = useState<string | null>(null);
-  const [mixWith, setMixWith] = useState<string | null>(null);
+  const [wear, setWear] = useState<{ id: string } | null>(null);
   const [toLook, setToLook] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
   const [quiet, setQuiet] = useState<string | null>(null);
@@ -128,11 +128,8 @@ export function App() {
         <button aria-current={tab === 'looks' ? 'page' : undefined} onClick={() => setTab('looks')}>
           looks{nLooks > 0 && <sup>{nLooks}</sup>}
         </button>
-        {lastStep && (
-          <button className="nav__icon" aria-label={`Undo: ${lastStep}`} title={`Undo: ${lastStep} (${hint('undo')})`} onClick={() => void undoLast()}>
-            <Icon name="undo" />
-          </button>
-        )}
+        <button className="nav__icon" aria-label="Undo" disabled={!lastStep} onClick={() => void undoLast()}
+          title={lastStep ? `Undo: ${lastStep} (${hint('undo')})` : undefined}><Icon name="undo" /></button>
         <button className="nav__icon" aria-label="Settings" aria-current={tab === 'settings' ? 'page' : undefined}
           onClick={() => setTab('settings')}><Icon name="gear" /></button>
       </nav>
@@ -140,7 +137,7 @@ export function App() {
       <Closet hidden={tab !== 'closet'} active={tab === 'closet' && !covered && !adding} onAdd={() => setAdding(true)}
         onOpen={openFocus} />
       <Looks hidden={tab !== 'looks'} active={tab === 'looks' && !covered && !adding && !toLook}
-        startWith={mixWith} onOpen={openBoard} onFocus={openFocus} onAdd={() => setAdding(true)} />
+        startWith={wear} onOpen={openBoard} onFocus={openFocus} onAdd={() => setAdding(true)} />
       <Settings hidden={tab !== 'settings'} />
 
       {!covered && !toasting && tab !== 'settings' && line && quiet !== line.text && (
@@ -160,7 +157,7 @@ export function App() {
           sequence={focus.sequence}
           onGo={(id) => setFocus({ ...focus, id })}
           onClose={() => setFocus(null)}
-          onMix={(id) => { setFocus(null); setBoard(null); setMixWith(id); setTab('looks'); }}
+          onWear={(id) => { setFocus(null); setBoard(null); setWear({ id }); setTab('looks'); }}
           onAddToLook={(id) => setToLook(id)}
         />
       )}

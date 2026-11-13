@@ -74,7 +74,6 @@ export function Canvas(props: {
   /** something besides pieces under the pointer was clicked */
   onEmpty?: () => void;
   api?: MutableRefObject<CanvasApi | null>;
-  className?: string;
   children?: ReactNode;
 }) {
   const { pieces, sel } = props;
@@ -440,7 +439,7 @@ export function Canvas(props: {
   return (
     <div
       ref={root}
-      className={'canvas' + (props.className ? ' ' + props.className : '') + (sel.size ? ' is-selecting' : '') + (lifted.length ? ' is-carrying' : '')}
+      className={'canvas' + (sel.size ? ' is-selecting' : '') + (lifted.length ? ' is-carrying' : '')}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('[data-pid], [data-hud]')) fit(true); }}
       onContextMenu={(e) => e.preventDefault()}
