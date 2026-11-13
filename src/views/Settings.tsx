@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { download, makeBackup, restoreBackup } from '../lib/backup';
+import { TOP_UP_URL } from '../lib/pollinations';
 import { saveSettings, useStore } from '../lib/store';
 import { keyChanged, refreshCredits, resume, tryAgain, useStudio } from '../lib/studio';
 import { costOf, MODELS } from '../lib/types';
@@ -31,7 +32,6 @@ export function Settings({ hidden }: { hidden: boolean }) {
   };
 
   const per = costOf(settings.model);
-  const waiting = items.filter((i) => i.state === 'queued' || i.state === 'working').length;
   const credits = settings.key ? studio.credits : null;
 
   return (
@@ -46,11 +46,13 @@ export function Settings({ hidden }: { hidden: boolean }) {
             <span className="small muted">photos left<br />{credits.toFixed(3)} credits</span>
           </div>
         )}
-        {(studio.hold === 'credits' || (credits !== null && credits < per)) && (
+        {(studio.hold === 'credits' || studio.free || (credits !== null && credits < per * 10)) && (
           <p className="note">
-            {waiting > 0 && `${waiting} ${waiting === 1 ? 'photo is' : 'photos are'} waiting and will finish on their own once there are credits. `}
-            Credits don't refill by themselves: earn them on the{' '}
-            <a href="https://enter.pollinations.ai/quests" target="_blank" rel="noreferrer">Quests page</a> or top up there.
+            {credits !== null && credits >= per ? 'Running low on credits. ' : 'Out of credits, so photos go through a free backup model. '}
+            Credits don't refill by themselves. Top up on the{' '}
+            <a href={TOP_UP_URL} target="_blank" rel="noreferrer">Pollinations Pollen page</a>: $5 covers about{' '}
+            {Math.floor(5 / per).toLocaleString()} photos. The free backup is rougher on prints, sometimes refuses a photo, and
+            its owner keeps a copy of the pictures it gets.
           </p>
         )}
         {(bad || studio.hold === 'key') && <p className="problem">This key wasn't accepted. Paste it again, or make a new one.</p>}
@@ -65,7 +67,8 @@ export function Settings({ hidden }: { hidden: boolean }) {
         {!settings.key && (
           <p className="note">
             Sign in at <a href="https://enter.pollinations.ai" target="_blank" rel="noreferrer">enter.pollinations.ai</a>, create a secret key and paste it here.
-            It stays on this device.
+            It stays on this device. The <a href="https://enter.pollinations.ai/quests" target="_blank" rel="noreferrer">Quests page</a> gives
+            a few one-time starter credits; after that, <a href={TOP_UP_URL} target="_blank" rel="noreferrer">top up</a> (a quick photo costs half a cent).
           </p>
         )}
       </section>

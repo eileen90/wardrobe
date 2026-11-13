@@ -5,6 +5,16 @@ import { isCategory, LENGTHS, type Category, type Length } from './types';
 const BASE = 'https://gen.pollinations.ai';
 
 /**
+ * Free community model used when the account runs out of credits. No quota, 8 requests a
+ * minute, and its owner logs prompts and pictures. Rougher on prints, and it sometimes
+ * refuses harmless photos (shoes, in testing).
+ */
+export const FREE_MODEL = 'community/scriptsnsenses-sys/flux-2-dev-free';
+
+/** Where to buy more credits. */
+export const TOP_UP_URL = 'https://enter.pollinations.ai/pollen#buy-pollen';
+
+/**
  * Why a request did not go through:
  *   key     – the key was refused; only the person can fix that
  *   credits – the account has run out; picks up again once there is a balance

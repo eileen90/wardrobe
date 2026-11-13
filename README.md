@@ -32,10 +32,16 @@ downloaded once, on first use.
 Redrawing photos uses [Pollinations](https://enter.pollinations.ai). Sign in there, create a secret
 key and paste it under **Settings**. It is stored on that device only.
 
-Credits ("pollen") do not refill on a timer: they come from the Quests page or from topping up.
-When they run out, or the service is busy, or the device is offline, photos wait in a backlog
-that survives closing the app and finishes by itself the next time the app is open and the
-studio is reachable again. Checking the balance is free.
+Credits ("pollen", 1 pollen = $1) do not refill on a timer: the
+[Quests page](https://enter.pollinations.ai/quests) gives a few one-time starter credits, and after
+that you [top up](https://enter.pollinations.ai/pollen#buy-pollen). A quick redraw costs 0.005
+(about 1,000 photos for $5), a careful one 0.03. Checking the balance is free.
+
+When credits run out, photos go through the free community model `flux-2-dev-free` instead of
+waiting. It has no quota (8 requests a minute), but it is rougher on prints, sometimes refuses
+harmless photos, and its owner logs the pictures sent to it. The paid model comes back as soon as
+the balance covers a photo again. If the service is busy or the device is offline, photos wait in
+a backlog that survives closing the app and finishes by itself once the studio is reachable.
 
 ## Keys
 

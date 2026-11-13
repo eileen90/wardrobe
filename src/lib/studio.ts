@@ -20,7 +20,7 @@ import * as db from './db';
 import { blobToDataUrl, flatJpeg, loadImage, makeCanvas, scaled, toBlob } from './img';
 import { cutOut, hasPlainBackdrop, hasTransparency, palette, rankBackdrops, trim } from './key';
 import { kindFromShape } from './kind';
-import { balance, look, remake, StudioError, type StudioFault } from './pollinations';
+import { balance, FREE_MODEL, look, remake, StudioError, type StudioFault } from './pollinations';
 import { addItem, getItem, getState, refreshPics, updateItem } from './store';
 import { costOf, type Category, type Item, type Length } from './types';
 import { uid } from './types';
@@ -110,8 +110,10 @@ export interface StudioStatus {
   fetching: number;
   /** last balance read from the account, when known */
   credits: number | null;
+  /** out of credits, so photos are going through the free backup model */
+  free: boolean;
 }
-let status: StudioStatus = { left: 0, busy: false, hold: null, fetching: 0, credits: null };
+let status: StudioStatus = { left: 0, busy: false, hold: null, fetching: 0, credits: null, free: false };
 const subs = new Set<() => void>();
 function setStatus(p: Partial<StudioStatus>) {
   status = { ...status, ...p };
@@ -135,6 +137,24 @@ async function saveCut(id: string, cut: HTMLCanvasElement) {
   await db.putBlob(`${id}:cut`, await toBlob(full, 'image/png'));
   await db.putBlob(`${id}:thumb`, await toBlob(scaled(full, THUMB_MAX), 'image/png'));
   return full;
+}
+
+/* ---------- the free backup ---------- */
+
+/**
+ * Out of credits, photos go to the free model instead of waiting. The paid model is used
+ * again once a balance read shows enough credits for a photo.
+ */
+async function remakeWithBackup(opts: Parameters<typeof remake>[0]): Promise<Blob> {
+  if (!status.free) {
+    try {
+      return await remake(opts);
+    } catch (e) {
+      if (!(e instanceof StudioError) || e.kind !== 'credits') throw e;
+      setStatus({ free: true });
+    }
+  }
+  return remake({ ...opts, model: FREE_MODEL });
 }
 
 /* ---------- one piece ---------- */
@@ -185,7 +205,8 @@ async function develop(id: string): Promise<void> {
       }
     } catch (e) {
       // A look that fails on its own is no reason to stop; anything that pauses the studio is.
-      if (!(e instanceof StudioError) || e.kind !== 'fail') throw e;
+      // Out of credits, the look is skipped and the outline decides the kind.
+      if (!(e instanceof StudioError) || (e.kind !== 'fail' && e.kind !== 'credits')) throw e;
     }
     item = getItem(id);
     if (!item) return;
@@ -201,7 +222,7 @@ async function develop(id: string): Promise<void> {
       const size = frameFor(item, photo.width / photo.height);
       // A second backdrop is tried only if the first result cannot be cut out.
       for (const b of rankBackdrops(photo).slice(0, 2)) {
-        const out = await remake({ key, model, photo: dataUrl, size, prompt: studioPrompt(item, b.words) });
+        const out = await remakeWithBackup({ key, model, photo: dataUrl, size, prompt: studioPrompt(item, b.words) });
         const shot = scaled(await loadImage(out), CUT_MAX);
         const res = cutOut(shot);
         if (res) {
@@ -268,7 +289,12 @@ async function pump() {
           await updateItem(id, { state: 'queued' });
           queue.push(id);
         } else {
-          await updateItem(id, { state: 'raw', problem: "The studio couldn't clean this photo. Another photo of it may work." });
+          await updateItem(id, {
+            state: 'raw',
+            problem: status.free
+              ? 'The free backup model refused this photo. Top up credits and redo it.'
+              : "The studio couldn't clean this photo. Another photo of it may work.",
+          });
         }
       } else {
         // The studio itself is unavailable: everything stays queued and the queue waits.
@@ -311,7 +337,10 @@ async function readBalance() {
   const { key } = getState().settings;
   if (!key) return null;
   const b = await balance(key);
-  if (typeof b === 'number') setStatus({ credits: b });
+  if (typeof b === 'number') {
+    // Topped up: back to the paid model.
+    setStatus({ credits: b, ...(b >= costOf(getState().settings.model) ? { free: false } : {}) });
+  }
   return b;
 }
 /** For the settings page: read the balance now. */
