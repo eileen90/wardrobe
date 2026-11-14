@@ -1966,7 +1966,7 @@ kbd.pill.is-key {
   position: absolute;
   left: 2px;
   bottom: 100%;
-  margin-bottom: calc(8px * var(--zl, 1));
+  margin-bottom: calc(6px * var(--zl, 1));
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

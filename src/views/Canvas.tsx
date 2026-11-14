@@ -181,7 +181,7 @@ export function Canvas(props: {
     w.style.transform = `translate3d(${v.x}px, ${v.y}px, 0) scale(${v.z})`;
     r.style.setProperty('--zi', String(Math.min(3, Math.max(1, 1 / v.z))));
     // Names on the floor stay readable much further out.
-    r.style.setProperty('--zl', String(Math.min(5, Math.max(1, 1 / v.z))));
+    r.style.setProperty('--zl', String(Math.min(4, Math.max(1, 1 / v.z))));
     // Controls drawn on screen follow the view; with none showing, nothing needs drawing again.
     if ((live.current.hud || live.current.sel.size) && !tickPending.current) {
       tickPending.current = true;

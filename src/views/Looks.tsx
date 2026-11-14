@@ -143,6 +143,24 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [looks]);
 
+  // The outfit grew into a look's area: the area steps aside, so nothing lies on the outfit.
+  useEffect(() => {
+    const all = bounds(outfitBoxes);
+    if (!all) return;
+    const busy = { x0: all.x0 - 40, y0: all.y0 - 40, x1: all.x1 + 40, y1: all.y1 + 40 };
+    const ls = getState().looks.filter((l) => l.at);
+    const hit = ls.filter((l) => { const r = areaRect(l); return r.x0 < busy.x1 && busy.x0 < r.x1 && r.y0 < busy.y1 && busy.y0 < r.y1; });
+    if (!hit.length) return;
+    const zone = { x0: Math.min(outfitZone.x0, busy.x0), y0: Math.min(outfitZone.y0, busy.y0), x1: Math.max(outfitZone.x1, busy.x1), y1: Math.max(outfitZone.y1, busy.y1) };
+    const taken = ls.filter((l) => !hit.includes(l)).map(areaRect);
+    for (const l of hit) {
+      const at = freeSpot(taken, zone, areaScale(l));
+      taken.push(areaRect({ ...l, at }));
+      void saveLook({ ...l, at });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outfitBoxes]);
+
   const thumbs = useMemo(() => new Map(looks.map((l) => [l.id, <Area look={l} items={byId} />])), [looks, byId]);
   const outfitThumb = useMemo(() => <OutfitArea pieces={fit.pieces} items={byId} room={room} />, [fit.pieces, byId, room]);
   const areas: CanvasArea[] = useMemo(() => {

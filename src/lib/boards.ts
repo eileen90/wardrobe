@@ -301,7 +301,7 @@ export const LABELS: Record<Edit, string> = {
 
 /** How big a saved look's area is drawn, as a share of a full board, unless resized. */
 export const AREA_S = 0.42;
-const GAP = 70;
+const GAP = 90;
 export const areaScale = (l: Pick<Look, 's'>) => l.s ?? AREA_S;
 
 export interface Rect { x0: number; y0: number; x1: number; y1: number }
