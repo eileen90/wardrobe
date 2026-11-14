@@ -60,7 +60,7 @@ export function Add({ open, onClose }: { open: boolean; onClose: () => void }) {
             onKeyDown={(e) => isDone(e) && link.trim() && send(link)} />
         </label>
       </div>
-      {!touch && <p className="note">Or drop pictures anywhere in the window, or paste with {describe('mod+v')}.</p>}
+      {!touch && <p className="note">Or drop or paste them anywhere ({describe('mod+v')}).</p>}
     </Sheet>
   );
 }

@@ -1894,3 +1894,10 @@ kbd.pill.is-key {
   inset: 0;
   pointer-events: none;
 }
+/* Notes: the label sits level with the first line of text, not the middle of the field. */
+.line:has(textarea) {
+  align-items: start;
+}
+.line:has(textarea) > span:first-child {
+  padding-top: 7px;
+}

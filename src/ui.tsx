@@ -117,6 +117,12 @@ export function Garment({ item, size = 'thumb', small, raw }: {
     setLevel((cur) => l || cur || (size === 'full' ? FULL : small ? 336 : 672));
   };
   useLayoutEffect(look);
+  // Pages and pieces arrive with a grow or slide; look again once that has settled.
+  useEffect(() => {
+    const t = setTimeout(look, 750);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
   useEffect(() => {
     if (!sized || !el.current) return;
     const off = onZoom(el.current, look);
