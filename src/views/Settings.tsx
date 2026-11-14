@@ -73,13 +73,11 @@ export function Settings({ hidden }: { hidden: boolean }) {
             <span className="small muted">photos left<br />{credits.toFixed(3)} credits</span>
           </div>
         )}
-        {(studio.hold === 'credits' || studio.free || (credits !== null && credits < per * 10)) && (
+        {(studio.hold === 'credits' || (credits !== null && credits < per * 10)) && (
           <p className="note">
-            {credits !== null && credits >= per ? 'Running low on credits. ' : 'Out of credits, so photos go through a free backup model. '}
-            Credits don't refill by themselves. Top up on the{' '}
-            <a href={TOP_UP_URL} target="_blank" rel="noreferrer">Pollinations Pollen page</a>: $5 covers about{' '}
-            {Math.floor(5 / per).toLocaleString()} photos. The free backup is rougher on prints, sometimes refuses a photo, and
-            its owner keeps a copy of the pictures it gets.
+            {credits !== null && credits >= per ? 'Running low on credits. ' : 'Out of credits. Photos wait until there are more. '}
+            <a href={TOP_UP_URL} target="_blank" rel="noreferrer">Top up</a>: $5 covers about{' '}
+            {Math.floor(5 / per).toLocaleString()} photos.
           </p>
         )}
         {(bad || studio.hold === 'key') && <p className="problem">This key wasn't accepted. Paste it again, or make a new one.</p>}

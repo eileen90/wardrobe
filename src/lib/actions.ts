@@ -2,8 +2,10 @@
 import * as db from './db';
 import { record } from './history';
 import { getItem, getState, refreshPics, removeItem, removeLook, saveLook, updateItem } from './store';
-import { cancel, inLine, redo, resume, type RedoWith } from './studio';
-import { REDO_MODEL, type Item, type Look } from './types';
+import { TOP_UP_URL } from './pollinations';
+import { cancel, inLine, redo, refreshCredits, resume, type RedoWith } from './studio';
+import { costOf, REDO_MODEL, type Item, type Look } from './types';
+import { toast } from '../ui';
 
 export function removePiece(id: string) {
   cancel(id);
@@ -111,13 +113,24 @@ async function begin(id: string, how: RedoWith, recheckKind: boolean): Promise<S
 const redoModel = () => getState().settings.redoModel ?? REDO_MODEL;
 
 /** Redraw a piece's picture; undo stops it, or puts the old picture back once it has finished. */
+/** A redo that can't be paid for doesn't start: the picture stays as it is. */
+async function canPay(n: number, model: string): Promise<boolean> {
+  const b = await refreshCredits();
+  if (typeof b !== 'number' || b >= costOf(model) * n) return true;
+  const fits = Math.floor(b / costOf(model));
+  toast(fits ? `Credits for ${fits} of ${n}` : 'Out of credits', { label: 'Top up', run: () => window.open(TOP_UP_URL, '_blank', 'noopener') });
+  return false;
+}
+
 export async function redoPiece(id: string, how: RedoWith = {}) {
+  if (!(await canPay(1, how.model ?? redoModel()))) return;
   const snap = await begin(id, { model: redoModel(), ...how }, false);
   if (snap) record('Redoing the picture', () => putBack(id, snap));
 }
 
 /** Redraw many pictures at once: one undo step puts every old picture back. */
 export async function redoMany(ids: string[], how: RedoWith = {}, { recheckKind = false } = {}) {
+  if (!(await canPay(ids.length, how.model ?? redoModel()))) return;
   const snaps: [string, Snap][] = [];
   for (const id of ids) {
     const snap = await begin(id, { model: redoModel(), ...how }, recheckKind);

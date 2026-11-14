@@ -113,7 +113,6 @@ export function App() {
     : studio.hold === 'credits' && n ? { text: `${plural(n, 'photo')} waiting for credits`, act: 'Top up', run: () => setTab('settings') }
     : studio.hold === 'offline' && n ? { text: `Offline. ${plural(n, 'photo')} will finish once you're back`, act: 'Retry', run: tryAgain }
     : studio.hold === 'busy' && n ? { text: `The studio is busy. ${plural(n, 'photo')} will finish shortly`, act: 'Retry', run: tryAgain }
-    : studio.free && n ? { text: `Out of credits. Cleaning ${plural(n, 'photo')} with the free backup`, act: 'Top up', run: () => setTab('settings') }
     : n ? { text: `Cleaning ${plural(n, 'photo')}`, act: 'Stop', run: () => void stopStudio() }
     : studio.fetching ? { text: 'Getting the picture', act: 'Cancel', run: cancelFetching }
     : null;

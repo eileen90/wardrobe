@@ -20,7 +20,7 @@ import * as db from './db';
 import { blobToDataUrl, flatJpeg, loadImage, makeCanvas, scaled, toBlob } from './img';
 import { cutOut, hasPlainBackdrop, hasTransparency, palette, rankBackdrops, trim } from './key';
 import { kindFromShape } from './kind';
-import { balance, critique, FREE_MODEL, look, remake, StudioError, type StudioFault } from './pollinations';
+import { balance, critique, look, remake, StudioError, type StudioFault } from './pollinations';
 import { addItem, getItem, getState, refreshPics, updateItem } from './store';
 import { costOf, REDO_MODEL, type Category, type Item, type Length } from './types';
 import { uid } from './types';
@@ -159,9 +159,8 @@ export interface StudioStatus {
   /** last balance read from the account, when known */
   credits: number | null;
   /** out of credits, so photos are going through the free backup model */
-  free: boolean;
 }
-let status: StudioStatus = { left: 0, busy: false, hold: null, fetching: 0, credits: null, free: false };
+let status: StudioStatus = { left: 0, busy: false, hold: null, fetching: 0, credits: null };
 const subs = new Set<() => void>();
 function setStatus(p: Partial<StudioStatus>) {
   status = { ...status, ...p };
@@ -185,24 +184,6 @@ async function saveCut(id: string, cut: HTMLCanvasElement) {
   await db.putBlob(`${id}:cut`, await toBlob(full, 'image/png'));
   await db.putBlob(`${id}:thumb`, await toBlob(scaled(full, THUMB_MAX), 'image/png'));
   return full;
-}
-
-/* ---------- the free backup ---------- */
-
-/**
- * Out of credits, photos go to the free model instead of waiting. The paid model is used
- * again once a balance read shows enough credits for a photo.
- */
-async function remakeWithBackup(opts: Parameters<typeof remake>[0]): Promise<Blob> {
-  if (!status.free) {
-    try {
-      return await remake(opts);
-    } catch (e) {
-      if (!(e instanceof StudioError) || e.kind !== 'credits') throw e;
-      setStatus({ free: true });
-    }
-  }
-  return remake({ ...opts, model: FREE_MODEL });
 }
 
 /* ---------- one piece ---------- */
@@ -293,7 +274,7 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
       }
       // A second backdrop is tried only if the first result cannot be cut out.
       for (const b of rankBackdrops(photo).slice(0, 2)) {
-        const out = await remakeWithBackup({ key, model, photo: dataUrl, size, signal, prompt: studioPrompt(item, b.words, fixes) });
+        const out = await remake({ key, model, photo: dataUrl, size, signal, prompt: studioPrompt(item, b.words, fixes) });
         const shot = scaled(await loadImage(out), CUT_MAX);
         // A photo without any of the backdrop's colour: whatever of it is on the remake is
         // light the model bounced off its backdrop, and comes off everywhere.
@@ -382,9 +363,7 @@ async function pump() {
         } else {
           await updateItem(id, {
             state: 'raw',
-            problem: status.free
-              ? 'The free backup model refused this photo. Top up credits and redo it.'
-              : "The studio couldn't clean this photo. Another photo of it may work.",
+            problem: "The studio couldn't clean this photo. Another photo of it may work.",
           });
         }
       } else {
@@ -431,7 +410,7 @@ async function readBalance() {
   const b = await balance(key);
   if (typeof b === 'number') {
     // Topped up: back to the paid model.
-    setStatus({ credits: b, ...(b >= costOf(getState().settings.model) ? { free: false } : {}) });
+    setStatus({ credits: b });
   }
   return b;
 }
