@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { startCloud, touch } from './cloud';
 import * as db from './db';
 import { kindFromWords } from './kind';
+import { dropMips, ensureMips, mipBlob, mipLevels, whenMade } from './mips';
 import { parsePrice } from './money';
 import type { Item, Look, Settings } from './types';
 import { MODELS } from './types';
@@ -74,6 +75,8 @@ export async function load() {
   looks.sort((a, b) => b.updatedAt - a.updatedAt);
   set({ ready: true, items, looks, settings: { ...DEFAULT_SETTINGS, ...settings } });
   for (const i of dead) void purge(i.id);
+  // Pictures saved before there were smaller copies get them now, quietly, on the device.
+  setTimeout(() => ensureMips(items.filter((i) => i.state === 'ready').map((i) => i.id)), 1500);
   // Ask the browser not to evict the closet when storage runs low.
   void navigator.storage?.persist?.();
   // Accounts, if set up: signs back in and syncs in the background.
@@ -127,6 +130,7 @@ async function purge(id: string) {
   }
   await db.delItem(id);
   await db.delBlobs(id);
+  await dropMips(id);
   dropUrls(id);
   touch('item', id);
 }
@@ -165,6 +169,7 @@ export async function applyRemoteItems(puts: Item[], dels: string[]) {
   for (const id of dels) {
     await db.delItem(id);
     await db.delBlobsQuiet(id);
+    await dropMips(id);
   }
   const byId = new Map(puts.map((i) => [i.id, i]));
   const gone = new Set(dels);
@@ -211,8 +216,30 @@ function dropUrls(id: string) {
 /** Call after an item's pictures were rewritten. */
 export const refreshPics = dropUrls;
 
-async function picUrl(item: Item, want: 'thumb' | 'full' | 'raw'): Promise<string | null> {
-  const kind: db.Pic = item.state === 'ready' && want !== 'raw' ? (want === 'thumb' ? 'thumb' : 'cut') : 'raw';
+/** Size a picture is wanted at: its longest side in device pixels, or 0 for "as stored". */
+async function picUrl(item: Item, want: 'thumb' | 'full' | 'raw', need = 0): Promise<string | null> {
+  const ready = item.state === 'ready' && want !== 'raw';
+  // Drawn at a known size: the smallest copy that is still at least that big.
+  if (ready && need) {
+    const cut = await db.getBlob(`${item.id}:cut`);
+    const levels = cut && (await mipLevels(item.id, cut));
+    if (cut && !levels) ensureMips([item.id]);
+    const L = levels?.find((l) => l >= need);
+    if (cut && L) {
+      const key = `${item.id}:m${L}:${item.rev}`;
+      const hit = urls.get(key);
+      if (hit) return hit;
+      const blob = await mipBlob(item.id, L, cut);
+      if (blob) {
+        const u = URL.createObjectURL(blob);
+        urls.set(key, u);
+        return u;
+      }
+    }
+    if (levels) want = 'full';
+    else want = need > 640 ? 'full' : 'thumb';
+  }
+  const kind: db.Pic = ready ? (want === 'thumb' ? 'thumb' : 'cut') : 'raw';
   const key = `${item.id}:${kind}:${item.rev}`;
   const hit = urls.get(key);
   if (hit) return hit;
@@ -223,8 +250,16 @@ async function picUrl(item: Item, want: 'thumb' | 'full' | 'raw'): Promise<strin
   return u;
 }
 
+// Copies made in the background: pictures on screen look again (in one go, not one by one).
+let madeTimer: ReturnType<typeof setTimeout> | undefined;
+whenMade((id) => {
+  dropUrls(id);
+  clearTimeout(madeTimer);
+  madeTimer = setTimeout(() => set({ pics: state.pics + 1 }), 300);
+});
+
 /** Object URL for an item's picture: the cut-out when there is one, else the photo. */
-export function usePic(item: Item | undefined, want: 'thumb' | 'full' | 'raw' = 'thumb') {
+export function usePic(item: Item | undefined, want: 'thumb' | 'full' | 'raw' = 'thumb', need = 0) {
   const [url, setUrl] = useState<string | null>(null);
   const id = item?.id;
   const rev = item?.rev;
@@ -233,11 +268,11 @@ export function usePic(item: Item | undefined, want: 'thumb' | 'full' | 'raw' = 
   useEffect(() => {
     let on = true;
     if (!item) return setUrl(null);
-    void picUrl(item, want).then((u) => on && setUrl(u));
+    void picUrl(item, want, need).then((u) => on && setUrl(u));
     return () => {
       on = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, rev, st, want, landed]);
+  }, [id, rev, st, want, landed, need]);
   return url;
 }

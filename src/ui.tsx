@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { LEVELS } from './lib/mips';
 import { isKey } from './lib/shortcuts';
 import { usePic } from './lib/store';
 import type { Item } from './lib/types';
@@ -57,13 +58,73 @@ export function Mark({ className }: { className?: string }) {
 
 /* ---------- a piece, however far along it is ---------- */
 
+/* ---------- how big a picture is drawn ---------- */
+
+/** Larger than any copy: draw from the cut-out itself. */
+const FULL = 1e4;
+/** Sizes as copies are kept: the smallest copy at least `px` across. */
+const levelFor = (px: number) => LEVELS.find((l) => l >= px * 0.95) ?? FULL;
+
+/**
+ * The floor and the boards zoom by changing one transform on their world, which re-renders
+ * nothing; pictures inside watch that transform and look at their size once it settles.
+ */
+const worlds = new WeakMap<Element, Set<() => void>>();
+function onZoom(el: Element, f: () => void) {
+  const world = el.closest('.canvas__world');
+  if (!world) return () => {};
+  let subs = worlds.get(world);
+  if (!subs) {
+    const set = new Set<() => void>();
+    subs = set;
+    worlds.set(world, set);
+    let t: ReturnType<typeof setTimeout> | undefined, t2: ReturnType<typeof setTimeout> | undefined;
+    new MutationObserver(() => {
+      clearTimeout(t); clearTimeout(t2);
+      t = setTimeout(() => set.forEach((g) => g()), 180);
+      // An eased move to fit takes about half a second.
+      t2 = setTimeout(() => set.forEach((g) => g()), 620);
+    }).observe(world, { attributes: true, attributeFilter: ['style', 'class'] });
+  }
+  subs.add(f);
+  return () => void subs!.delete(f);
+}
+
+/** The copy size that suits how big `el` is on screen now, for a picture of `aspect` (w / h). */
+function measure(el: Element, aspect: number) {
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return 0;
+  const a = aspect > 0 ? aspect : 1;
+  // Fitted inside the box, as object-fit: contain draws it.
+  const h = Math.min(r.height, r.width / a);
+  return levelFor(Math.max(h, h * a) * (window.devicePixelRatio || 1));
+}
+
 export function Garment({ item, size = 'thumb', small, raw }: {
   item: Item; size?: 'thumb' | 'full'; small?: boolean;
   /** show the original photo instead of the cut-out */
   raw?: boolean;
 }) {
   const original = usePeeking().has(item.id) || !!raw;
-  const url = usePic(item, original ? 'raw' : size);
+  // The picture is fetched at the size it is drawn; until that is known, a probe takes the
+  // picture's place to be measured.
+  const el = useRef<HTMLElement | null>(null);
+  const [level, setLevel] = useState(0);
+  const sized = item.state === 'ready' && !original;
+  const look = () => {
+    const l = el.current && measure(el.current, item.aspect);
+    // Not on screen (a hidden page): a fair guess, refined once it is measured.
+    setLevel((cur) => l || cur || (size === 'full' ? FULL : small ? 336 : 672));
+  };
+  useLayoutEffect(look);
+  useEffect(() => {
+    if (!sized || !el.current) return;
+    const off = onZoom(el.current, look);
+    window.addEventListener('resize', look);
+    return () => { off(); window.removeEventListener('resize', look); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sized, !!el.current]);
+  const url = usePic(sized && !level ? undefined : item, original ? 'raw' : size, sized ? level : 0);
   // A piece that comes back from the studio while you watch is wiped in from the top.
   const was = useRef(item.state);
   const [fresh, setFresh] = useState(false);
@@ -73,9 +134,9 @@ export function Garment({ item, size = 'thumb', small, raw }: {
   }, [item.state]);
   if (item.state === 'ready' && !original) {
     return url
-      ? <img className={'garment' + (small ? ' is-small' : '') + (fresh ? ' is-fresh' : '')} src={url} alt={item.name}
-          draggable={false} onAnimationEnd={() => setFresh(false)} />
-      : null;
+      ? <img ref={(e) => { el.current = e; }} className={'garment' + (small ? ' is-small' : '') + (fresh ? ' is-fresh' : '')}
+          src={url} alt={item.name} data-level={level} draggable={false} onAnimationEnd={() => setFresh(false)} />
+      : <span className="garment__probe" ref={(e) => { el.current = e; }} />;
   }
   const developing = item.state === 'working';
   return (

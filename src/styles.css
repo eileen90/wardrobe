@@ -1888,3 +1888,9 @@ kbd.pill.is-key {
 .focus__fig .print.is-original img {
   max-height: min(72svh, 100%);
 }
+/* Stands in for a picture until it is known how big it is drawn. */
+.garment__probe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
