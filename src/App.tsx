@@ -119,7 +119,9 @@ export function App() {
 
   return (
     <div className="app">
-      <nav className={'nav glass' + (covered ? ' is-away' : '')} aria-label="Main">
+      <nav className={'nav glass' + (covered ? ' is-away' : '')} aria-label="Main"
+        // A tab clicked doesn't keep the keyboard: Space and the arrows still belong to the page.
+        onMouseDown={(e) => e.preventDefault()}>
         <button aria-current={tab === 'closet' ? 'page' : undefined} onClick={() => setTab('closet')}>
           closet{nItems > 0 && <sup>{nItems}</sup>}
         </button>

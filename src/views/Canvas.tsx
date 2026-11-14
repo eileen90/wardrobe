@@ -154,6 +154,7 @@ export function Canvas(props: {
   live.current = props;
   const tickPending = useRef(false);
   const restT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const barEl = useRef<HTMLDivElement>(null);
 
   const things = (): Thing[] => {
     const P = live.current;
@@ -179,6 +180,8 @@ export function Canvas(props: {
     }
     w.style.transform = `translate3d(${v.x}px, ${v.y}px, 0) scale(${v.z})`;
     r.style.setProperty('--zi', String(Math.min(3, Math.max(1, 1 / v.z))));
+    // Names on the floor stay readable much further out.
+    r.style.setProperty('--zl', String(Math.min(5, Math.max(1, 1 / v.z))));
     // Controls drawn on screen follow the view; with none showing, nothing needs drawing again.
     if ((live.current.hud || live.current.sel.size) && !tickPending.current) {
       tickPending.current = true;
@@ -591,6 +594,16 @@ export function Canvas(props: {
     }
   };
 
+  // The toolbar stays whole on screen, however near the edge the selection is.
+  useLayoutEffect(() => {
+    const el = barEl.current;
+    if (!el) return;
+    const w = el.offsetWidth, W = size.current.w;
+    const x = parseFloat(el.style.left);
+    const k = Math.min(W - w / 2 - 8, Math.max(w / 2 + 8, x));
+    if (k !== x) el.style.left = k + 'px';
+  });
+
   /* ----- wheel and trackpad: pan, and zoom with ⌘ or a pinch ----- */
   useEffect(() => {
     const el = root.current;
@@ -759,7 +772,7 @@ export function Canvas(props: {
           </div>
         )}
         {bar && barAt && (
-          <div data-hud className={'toolbar' + (barAt.up ? '' : ' is-below')} role="toolbar" aria-label="Selected"
+          <div ref={barEl} data-hud className={'toolbar' + (barAt.up ? '' : ' is-below')} role="toolbar" aria-label="Selected"
             style={{ left: barAt.x, top: barAt.y }}>{bar}</div>
         )}
       </div>
