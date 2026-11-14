@@ -5,7 +5,8 @@ import { CURRENCIES, groupDigits, parsePrice, signOf } from '../lib/money';
 import { covered, isDone, isKey } from '../lib/shortcuts';
 import { saveSettings, useStore } from '../lib/store';
 import { CATEGORIES, type Item } from '../lib/types';
-import { Garment, Icon, NoteField, toast, useArmed } from '../ui';
+import { Garment, Icon, MoreToggle, NoteField, Pill, toast, useAlt, useArmed } from '../ui';
+import { copyPicture, savePicture } from '../lib/pictures';
 
 /** A text field that saves as you leave it, so typing never fights the store. */
 function Field({ value, onSave, placeholder, area, className, label }: {
@@ -100,7 +101,9 @@ function LinkField({ item }: { item: Item }) {
  * Redo the picture: the first press arms it and opens a field for what went wrong, the second
  * press (or Enter) sends it, with or without a note.
  */
-function Redo({ id }: { id: string }) {
+function Redo({ id, alt, original, onOriginal }: {
+  id: string; alt: boolean; original: boolean; onOriginal: (on: boolean) => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [armed, setArmed] = useArmed(box);
   const [note, setNote] = useState('');
@@ -109,6 +112,15 @@ function Redo({ id }: { id: string }) {
     setArmed(false);
     void redoPiece(id, note.trim() ? { note: note.trim() } : {});
   };
+  // Looking at the original photo: this button takes you back to the cut-out.
+  if (original || (alt && !armed)) {
+    return (
+      <div className="redo">
+        <Pill label={original ? 'show cut-out' : 'show original'} icon="photos" pressed={original} className="is-alt"
+          run={() => onOriginal(!original)} />
+      </div>
+    );
+  }
   return (
     <div ref={box} className={'redo' + (armed ? ' is-armed' : '')}>
       {armed && <NoteField value={note} onChange={setNote} onGo={go} onCancel={() => setArmed(false)} />}
@@ -135,6 +147,14 @@ export function Focus({ id, from, sequence, onGo, onClose, onWear, onAddToLook }
   const [leaving, setLeaving] = useState(false);
   const turned = useRef(0);
   const first = useRef(true);
+  // Option (or ⋯ on touch) shows each button's alternate; the original photo can be shown
+  // instead of the cut-out, and Option over the picture peeks at it.
+  const held = useAlt();
+  const [more, setMore] = useState(false);
+  const alt = held || more;
+  const [original, setOriginal] = useState(false);
+  const [over, setOver] = useState(false);
+  useEffect(() => { setOriginal(false); setMore(false); }, [id]);
 
   const at = sequence.indexOf(id);
   const go = (d: number) => {
@@ -212,10 +232,12 @@ export function Focus({ id, from, sequence, onGo, onClose, onWear, onAddToLook }
       <button className="iconbtn back" onClick={close} aria-label="Back"><Icon name="back" /></button>
 
       <div className="focus__stage"
+        onPointerEnter={(e) => e.pointerType === 'mouse' && setOver(true)}
+        onPointerLeave={() => setOver(false)}
         onPointerDown={(e) => { swipe.current = { x: e.clientX, y: e.clientY }; }}
         onPointerUp={swipeEnd} onPointerCancel={() => { swipe.current = null; }}>
         <div className="focus__fig" ref={fig}>
-          <Garment item={item} size="full" />
+          <Garment item={item} size="full" raw={item.state === 'ready' && (original || (held && over))} />
         </div>
         {sequence.length > 1 && at >= 0 && (
           <>
@@ -229,7 +251,10 @@ export function Focus({ id, from, sequence, onGo, onClose, onWear, onAddToLook }
 
       <aside className="slip">
         <div className="slip__scroll" key={item.id}>
-          <Field className="slip__name" label="Name" value={item.name} placeholder="Name" onSave={(name) => save({ name })} />
+          <div className="slip__top">
+            <Field className="slip__name" label="Name" value={item.name} placeholder="Name" onSave={(name) => save({ name })} />
+            <MoreToggle on={more} onChange={setMore} />
+          </div>
 
           {item.problem && item.state === 'raw' && <p className="problem">{item.problem}</p>}
 
@@ -267,15 +292,17 @@ export function Focus({ id, from, sequence, onGo, onClose, onWear, onAddToLook }
           </div>
 
           <div className="slip__acts">
-            <button className="pill is-on" onClick={() => onAddToLook(item.id)}>add to a look</button>
+            <Pill label="add to a look" className={alt ? '' : 'is-on'} run={() => onAddToLook(item.id)}
+              alt={{ label: 'copy picture', icon: 'copy', run: () => void copyPicture(item) }} showAlt={alt} />
             <button className="pill" disabled={item.state !== 'ready'} onClick={() => onWear(item.id)}>put it on</button>
-            {hasKey && !waiting && (
-              <Redo key={item.id} id={item.id} />
+            {!waiting && (hasKey || (item.state === 'ready' && (alt || original))) && (
+              <Redo key={item.id} id={item.id} alt={alt && item.state === 'ready'} original={original} onOriginal={setOriginal} />
             )}
             {waiting && (
               <button className="pill" onClick={() => void stopStudio([item.id])}><Icon name="x" />stop cleaning</button>
             )}
-            <button className="pill" onClick={remove}><Icon name="bin" />remove</button>
+            <Pill icon="bin" label="remove" run={remove}
+              alt={{ label: 'save picture', icon: 'share', run: () => void savePicture(item) }} showAlt={alt} />
           </div>
         </div>
       </aside>

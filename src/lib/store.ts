@@ -211,8 +211,8 @@ function dropUrls(id: string) {
 /** Call after an item's pictures were rewritten. */
 export const refreshPics = dropUrls;
 
-async function picUrl(item: Item, want: 'thumb' | 'full'): Promise<string | null> {
-  const kind: db.Pic = item.state === 'ready' ? (want === 'thumb' ? 'thumb' : 'cut') : 'raw';
+async function picUrl(item: Item, want: 'thumb' | 'full' | 'raw'): Promise<string | null> {
+  const kind: db.Pic = item.state === 'ready' && want !== 'raw' ? (want === 'thumb' ? 'thumb' : 'cut') : 'raw';
   const key = `${item.id}:${kind}:${item.rev}`;
   const hit = urls.get(key);
   if (hit) return hit;
@@ -224,7 +224,7 @@ async function picUrl(item: Item, want: 'thumb' | 'full'): Promise<string | null
 }
 
 /** Object URL for an item's picture: the cut-out when there is one, else the photo. */
-export function usePic(item: Item | undefined, want: 'thumb' | 'full' = 'thumb') {
+export function usePic(item: Item | undefined, want: 'thumb' | 'full' | 'raw' = 'thumb') {
   const [url, setUrl] = useState<string | null>(null);
   const id = item?.id;
   const rev = item?.rev;

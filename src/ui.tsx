@@ -57,8 +57,13 @@ export function Mark({ className }: { className?: string }) {
 
 /* ---------- a piece, however far along it is ---------- */
 
-export function Garment({ item, size = 'thumb', small }: { item: Item; size?: 'thumb' | 'full'; small?: boolean }) {
-  const url = usePic(item, size);
+export function Garment({ item, size = 'thumb', small, raw }: {
+  item: Item; size?: 'thumb' | 'full'; small?: boolean;
+  /** show the original photo instead of the cut-out */
+  raw?: boolean;
+}) {
+  const original = usePeeking().has(item.id) || !!raw;
+  const url = usePic(item, original ? 'raw' : size);
   // A piece that comes back from the studio while you watch is wiped in from the top.
   const was = useRef(item.state);
   const [fresh, setFresh] = useState(false);
@@ -66,7 +71,7 @@ export function Garment({ item, size = 'thumb', small }: { item: Item; size?: 't
     if (item.state === 'ready' && was.current !== 'ready') setFresh(true);
     was.current = item.state;
   }, [item.state]);
-  if (item.state === 'ready') {
+  if (item.state === 'ready' && !original) {
     return url
       ? <img className={'garment' + (small ? ' is-small' : '') + (fresh ? ' is-fresh' : '')} src={url} alt={item.name}
           draggable={false} onAnimationEnd={() => setFresh(false)} />
@@ -74,7 +79,7 @@ export function Garment({ item, size = 'thumb', small }: { item: Item; size?: 't
   }
   const developing = item.state === 'working';
   return (
-    <div className={'print' + (developing ? ' is-developing' : '')}>
+    <div className={'print' + (developing ? ' is-developing' : '') + (original && item.state === 'ready' ? ' is-original' : '')}>
       {url && <img src={url} alt={item.name} draggable={false} />}
     </div>
   );
@@ -180,6 +185,83 @@ export function useViewport() {
   }, []);
   return v;
 }
+
+/* ---------- alternates: what a button does with Option held ---------- */
+
+/**
+ * Held down, this key turns buttons into their alternates, as Option does in a Mac menu.
+ * TODO: register as 'alternate' (default 'alt') in shortcuts.ts and read it from there.
+ */
+const ALTERNATE_KEY = 'Alt';
+
+let altHeld = false;
+const altSubs = new Set<() => void>();
+function setAlt(on: boolean) {
+  if (altHeld === on) return;
+  altHeld = on;
+  altSubs.forEach((f) => f());
+}
+let altWatching = false;
+function watchAlt() {
+  if (altWatching) return;
+  altWatching = true;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ALTERNATE_KEY) { if (!e.repeat) setAlt(true); }
+    // Option with another key is a character or a shortcut, not a look at the alternates.
+    else if (altHeld) setAlt(false);
+  });
+  window.addEventListener('keyup', (e) => { if (e.key === ALTERNATE_KEY) { e.preventDefault(); setAlt(false); } });
+  // Let go outside the window, or the window lost focus while it was down.
+  window.addEventListener('pointermove', (e) => { if (!e.altKey && altHeld) setAlt(false); }, { passive: true });
+  window.addEventListener('blur', () => setAlt(false));
+  document.addEventListener('visibilitychange', () => setAlt(false));
+}
+/** True while the alternate key is held down. */
+export function useAlt() {
+  watchAlt();
+  return useSyncExternalStore((f) => (altSubs.add(f), () => void altSubs.delete(f)), () => altHeld);
+}
+
+/** Touch screens have no Option key: a ⋯ button shows the same alternates. */
+export const noAltKey = () => matchMedia('(pointer: coarse)').matches;
+export function MoreToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  if (!noAltKey()) return null;
+  return (
+    <button className={'iconbtn is-small more' + (on ? ' is-on' : '')} aria-label="More" aria-pressed={on}
+      onClick={() => onChange(!on)}><Icon name="more" /></button>
+  );
+}
+
+export interface Alternate { label: string; icon?: keyof typeof PATHS; run: () => void; pressed?: boolean }
+/** A pill that becomes its alternate while `alt` is on. */
+export function Pill({ icon, label, run, alt, showAlt, className = '', disabled, pressed }: {
+  icon?: keyof typeof PATHS; label: string; run: () => void; alt?: Alternate; showAlt?: boolean;
+  className?: string; disabled?: boolean; pressed?: boolean;
+}) {
+  const a = showAlt && alt ? alt : null;
+  const on = a ? a.pressed : pressed;
+  return (
+    <button className={'pill ' + className + (a ? ' is-alt' : '') + (on ? ' is-on' : '')} disabled={!a && disabled}
+      aria-pressed={on === undefined ? undefined : on} onClick={a ? a.run : run}>
+      {(a ? a.icon : icon) && <Icon name={(a ? a.icon : icon)!} />}{a ? a.label : label}
+    </button>
+  );
+}
+
+/* ---------- originals shown in place of cut-outs ---------- */
+
+let peeking = new Set<string>();
+const peekSubs = new Set<() => void>();
+/** Show these pieces' original photos wherever they are drawn (or stop). */
+export function peek(ids: string[], on: boolean) {
+  const next = new Set(peeking);
+  for (const id of ids) if (on) next.add(id); else next.delete(id);
+  peeking = next;
+  peekSubs.forEach((f) => f());
+}
+/** Stop showing originals, except for `keep`. */
+export const peekOnly = (keep: string[]) => peek([...peeking].filter((id) => !keep.includes(id)), false);
+export const usePeeking = () => useSyncExternalStore((f) => (peekSubs.add(f), () => void peekSubs.delete(f)), () => peeking);
 
 /* ---------- a button that asks for a note on its second press ---------- */
 

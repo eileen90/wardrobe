@@ -1856,3 +1856,35 @@ kbd.pill.is-key {
     font-size: 16px;
   }
 }
+
+/* Alternates: the ⋯ that shows them on touch screens, and the original photo in place of the cut-out. */
+.slip__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slip__top .slip__name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.iconbtn.more svg {
+  width: 18px;
+  height: 18px;
+}
+.iconbtn.more.is-on {
+  background: var(--ink);
+  color: #fff;
+}
+.selbar__head .iconbtn.more {
+  margin: -6px -6px -6px 0;
+}
+.print.is-original {
+  background: #fff;
+}
+.print.is-original img {
+  object-fit: contain;
+  filter: none;
+}
+.focus__fig .print.is-original img {
+  max-height: min(72svh, 100%);
+}
