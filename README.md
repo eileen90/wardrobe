@@ -9,9 +9,15 @@ size, to mix into outfits.
 
 - **Closet**: scattered on the floor or lined up by kind. Drag pieces wherever you like; in the
   rails, dragging reorders them or moves a piece to another kind.
-- **Looks**: an outfit laid out at true size. Step through each kind with the arrows beside a
-  piece (or the arrow keys), keep what you like, shuffle the rest and save it. A saved look opens
-  as a free board: drag, resize, layer, flip, share as a picture.
+- **Looks**: one big board to live on. The outfit being put together lies in the middle at true
+  size, with as many pieces of any kind as you like (two tops side by side, to compare). Click a
+  piece to select it: drag the corners to resize, the round handle to turn it, and the small
+  toolbar to layer, flip, copy or remove it; the arrows beside it step through its kind. Keep
+  what you like, shuffle the rest and save it: every saved look lies around the outfit as its
+  own area, to move, resize and arrange. Double-click an area (or zoom in on it) to go in and
+  change it with the same tools, its paper and its name; Esc, Done or a click outside steps back
+  out. Drag a piece onto another area to copy it there (from one saved look to another, it moves).
+- **Everywhere**: a click selects, a double-click opens the piece, a drag moves it at once.
 - **Private**: everything lives in the browser first and works offline. An optional account
   (*Settings → Account*) keeps the same closet on the phone and the laptop; *Settings → Backup*
   saves it all to one file.
@@ -82,9 +88,10 @@ supabase.com wakes it.
 | Where | Keys |
 | --- | --- |
 | Anywhere | paste a picture or a link to add it, ⌘Z undo, ⌫ remove (with undo), Esc close or clear, F12 all shortcuts |
-| Closet and looks | ⌘ click select, ⇧ click select a range, ⌘A select all, ⌥ drag resize, ⌘ scroll or pinch to zoom, 0 fit everything |
-| Pieces selected | arrows nudge, = − size, ] [ layer, F flip, ⌘D copy (on a saved look) |
-| Looks page | ↑ ↓ pick a kind, ← → change it (or everything not kept), L keep, ↩ all of that kind, Space shuffle, S save |
+| Closet and looks | click select, double-click open (a look: go in), ⌘ click add to the selection, ⇧ click select a range, ⌘A select all, ⌥ drag resize, ⌘ scroll or pinch to zoom, 0 fit (again: everything) |
+| On a phone | tap select, double-tap open, long press add to the selection, two fingers on the selection resize and turn it |
+| Pieces selected | arrows nudge (on the looks board ⇧ arrows), = − size, ] [ layer, F flip, R ⇧R turn, ⌘D copy (looks) |
+| Looks | ← → change the selected piece for the next of its kind (nothing selected: everything not kept), ↑ ↓ select the next piece, L keep, ↩ all of that kind (an area: go in), Space shuffle, S save, Esc step out of a look |
 | A piece | ← → previous / next |
 
 Every one of them can be changed in *Settings → Shortcuts*. On Windows and Linux ⌘ is Ctrl and ⌥ is Alt.
