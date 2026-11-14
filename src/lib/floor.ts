@@ -8,7 +8,7 @@
  * place yet (new ones, or ones whose kind changed) are given one: the first free spot in their
  * own cluster, read like a page.
  */
-import { between, bounds, hits, readingOrder, rectOf, seeded, type Box, type Rect } from './canvas';
+import { between, bounds, hits, readingOrder, seeded, type Box, type Rect } from './canvas';
 import { drawn, realSize } from './kind';
 import { CATEGORIES, catPlural, type Category, type Item } from './types';
 
@@ -24,20 +24,26 @@ export const GROUPS: GroupId[] = ['sorting', ...CATEGORIES.map((c) => c.id)];
 
 /** World units per centimetre at zoom 1. */
 export const PX = 3;
-const GAP = 16 * PX;
-const STEP = 6 * PX;
+const STEP = 4 * PX;
 /** Floor between two clusters. */
-const AISLE = 55 * PX;
+const AISLE = 42 * PX;
+/**
+ * How far a piece may tuck under its neighbours, as a share of its width and height on each
+ * side: enough to read as a pile, never enough to hide what a piece is or where to press it.
+ */
+const TUCK = 0.1;
+/** Small things (a pair of socks, a ring) show little of themselves; they barely tuck at all. */
+const tuckOf = (cluster: string) => (cluster === 'feet' || cluster === 'extra' ? 0.03 : cluster === 'bag' ? 0.06 : TUCK);
 
-/** The floor, left to right, the way an outfit is put on; each cluster is a loose pile of one kind. */
+/** The floor, left to right, the way an outfit is put on; each cluster is a pile of one kind. */
 const CLUSTERS: { id: string; name: string; cats: GroupId[]; width: number }[] = ([
-  { id: 'outer', name: 'jackets & coats', cats: ['outer'], width: 190 },
-  { id: 'top', name: 'tops & dresses', cats: ['top', 'dress'], width: 250 },
-  { id: 'bottom', name: 'bottoms', cats: ['bottom'], width: 170 },
-  { id: 'feet', name: 'socks & shoes', cats: ['socks', 'shoes'], width: 130 },
-  { id: 'bag', name: 'bags', cats: ['bag'], width: 120 },
-  { id: 'extra', name: 'accessories', cats: ['extra'], width: 140 },
-  { id: 'sorting', name: 'sorting…', cats: ['sorting'], width: 150 },
+  { id: 'outer', name: 'jackets & coats', cats: ['outer'], width: 160 },
+  { id: 'top', name: 'tops & dresses', cats: ['top', 'dress'], width: 205 },
+  { id: 'bottom', name: 'bottoms', cats: ['bottom'], width: 140 },
+  { id: 'feet', name: 'socks & shoes', cats: ['socks', 'shoes'], width: 120 },
+  { id: 'bag', name: 'bags', cats: ['bag'], width: 100 },
+  { id: 'extra', name: 'accessories', cats: ['extra'], width: 115 },
+  { id: 'sorting', name: 'sorting…', cats: ['sorting'], width: 125 },
 ] as { id: string; name: string; cats: GroupId[]; width: number }[]).map((c) => ({ ...c, width: c.width * PX }));
 export const clusterOf = (i: Item) => CLUSTERS.find((c) => c.cats.includes(groupOf(i)))!.id;
 
@@ -77,29 +83,43 @@ const boxFor = (i: Item, cx: number, cy: number, cluster: string): FloorBox => {
   const s = sizeOn(i);
   return { id: i.id, cluster, cx, cy, w: s.w, h: s.h, rot: tilt(i.id), z: i.pos?.z ?? Math.round(seeded(i.id, 6) * 20) };
 };
-const posOf = (i: Item, x: number, y: number, c: string): Pos => ({ ...(i.pos ?? {}), x: x / PX, y: y / PX, c });
+/** A place in the pile: what was laid lower down lies over what is above it, as when laying things out. */
+const posOf = (i: Item, x: number, y: number, c: string): Pos => ({ ...(i.pos ?? {}), x: x / PX, y: y / PX, c, z: Math.round(y / PX) });
+
+/** The part of a box no other piece may cover. */
+const core = (b: Pick<Box, 'cx' | 'cy' | 'w' | 'h'>, t: number): Rect =>
+  ({ x0: b.cx - b.w * (0.5 - t), x1: b.cx + b.w * (0.5 - t), y0: b.cy - b.h * (0.5 - t), y1: b.cy + b.h * (0.5 - t) });
 
 /**
- * Where a piece without a place goes: at the end of the last row of its cluster's lane, or at the
- * start of a new row under it, so the lane always reads like a page.
+ * Where a piece without a place goes: as high up its cluster's lane as it fits, as if laid down
+ * from the top of a pile, tucked a little under the pieces above and beside it, the leftmost
+ * such spot when several are as high. A small offset of its own keeps the pile from looking ruled.
  */
 function freeSpot(it: Item, cluster: string, boxes: Iterable<FloorBox>) {
   const L = lane(cluster);
   const s = sizeOn(it);
   const all = [...boxes];
-  const taken = all.map((b) => rectOf(b, GAP / 2 - 1));
-  const free = (x: number, y: number) => !taken.some((o) => hits(rectOf({ cx: x, cy: y, w: s.w, h: s.h }, GAP / 2 - 1), o));
-  const own = readingOrder(all.filter((b) => b.cx >= L.x0 - AISLE / 2 && b.cx < L.x1 + AISLE / 2));
-  const bottom = Math.max(0, ...own.map((b) => b.cy + b.h / 2));
-  if (own.length) {
-    // The last row: the pieces level with the last one read.
-    const last = own[own.length - 1];
-    const row = own.filter((b) => Math.abs(b.cy - b.h / 2 - (last.cy - last.h / 2)) < Math.max(STEP, last.h / 2));
-    const top = Math.min(...row.map((b) => b.cy - b.h / 2));
-    const x = Math.max(...row.map((b) => b.cx + b.w / 2)) + GAP + s.w / 2;
-    for (let dx = 0; x + dx + s.w / 2 <= L.x1 + 1; dx += STEP) if (free(x + dx, top + s.h / 2)) return { x: x + dx, y: top + s.h / 2 };
+  const T = tuckOf(cluster);
+  const taken = all.map((b) => core(b, tuckOf(b.cluster)));
+  const free = (x: number, y: number) => { const c = core({ cx: x, cy: y, w: s.w, h: s.h }, T); return !taken.some((o) => hits(c, o)); };
+  const own = all.filter((b) => b.cx >= L.x0 - AISLE / 2 && b.cx < L.x1 + AISLE / 2).map((b) => core(b, T));
+  const top = Math.min(0, ...own.map((o) => o.y0 - s.h * T));
+  const half = s.w * (0.5 - T);
+  let best: { x: number; y: number } | null = null;
+  const x1 = Math.max(L.x0 + s.w / 2, L.x1 - s.w / 2);
+  for (let x = L.x0 + s.w / 2; x <= x1 + 0.5; x += STEP) {
+    // Dropped from above, it comes to rest on whatever lies under this stretch of the lane.
+    let y0 = top;
+    for (const o of own) if (o.x0 < x + half && x - half < o.x1) y0 = Math.max(y0, o.y1);
+    const y = y0 + s.h * (0.5 - T);
+    if (!best || y < best.y - STEP) best = { x, y };
   }
-  for (let y = own.length ? bottom + GAP + s.h / 2 : s.h / 2; ; y += STEP) if (free(L.x0 + s.w / 2, y)) return { x: L.x0 + s.w / 2, y };
+  let { x, y } = best ?? { x: L.x0 + s.w / 2, y: s.h / 2 };
+  const jx = (seeded(it.id, 7) - 0.5) * 0.08 * s.w, jy = seeded(it.id, 8) * 0.06 * s.h;
+  if (free(x + jx, y + jy)) { x += jx; y += jy; }
+  // A piece put down by hand in the way: the next free spot below.
+  while (!free(x, y)) y += STEP;
+  return { x, y };
 }
 
 /** Rail order for a piece at a spot: between its neighbours of the same kind, in reading order. */
