@@ -85,7 +85,10 @@ export interface Placed {
   byHand?: boolean;
 }
 
-/** The outfit on the looks page, kept between visits. */
+/**
+ * The outfit on the looks page, kept between visits: any number of pieces of any kind.
+ * `kept` holds the ids of pieces that shuffling leaves alone (earlier versions kept rail ids).
+ */
 export interface WorkingLook { pieces: Placed[]; kept: string[]; wish: boolean }
 
 export interface Look {
@@ -95,6 +98,10 @@ export interface Look {
   updatedAt: number;
   paper: string;
   pieces: Placed[];
+  /** where its area lies on the looks board: top left corner, in board units */
+  at?: { x: number; y: number };
+  /** how big its area is drawn there, as a share of a full board */
+  s?: number;
 }
 
 export interface Settings {

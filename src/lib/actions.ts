@@ -1,10 +1,10 @@
 /** Things you do to the closet. Each one happens at once and goes into the undo history. */
 import * as db from './db';
 import { record } from './history';
-import { getItem, getState, refreshPics, removeItem, removeLook, saveLook, updateItem } from './store';
+import { getItem, getState, refreshPics, removeItem, removeLook, saveLook, saveSettings, updateItem } from './store';
 import { TOP_UP_URL } from './pollinations';
 import { cancel, inLine, redo, refreshCredits, resume, type RedoWith } from './studio';
-import { costOf, REDO_MODEL, type Item, type Look } from './types';
+import { costOf, REDO_MODEL, type Item, type Look, type WorkingLook } from './types';
 import { toast } from '../ui';
 
 export function removePiece(id: string) {
@@ -70,6 +70,28 @@ export function step(label: string, undo: () => void | Promise<void>, { key, qui
   if (key && lastStep.key === key && now - lastStep.at < 900) { lastStep.at = now; return; }
   lastStep = { key: key ?? '', at: now };
   record(label, undo, { quiet });
+}
+
+/**
+ * Change the looks board in one step: saved looks changed or added, looks removed, the outfit
+ * changed. One undo puts all of it back.
+ */
+export function changeBoard(
+  ch: { looks?: Look[]; removed?: string[]; working?: WorkingLook },
+  label: string,
+  opts: { key?: string; quiet?: boolean } = {},
+) {
+  const { looks, settings } = getState();
+  const befores = (ch.looks ?? []).map((l) => [l.id, looks.find((x) => x.id === l.id)] as const);
+  const workBefore = settings.working;
+  for (const l of ch.looks ?? []) void saveLook(l);
+  const undos = (ch.removed ?? []).map((id) => removeLook(id));
+  if (ch.working) void saveSettings({ working: ch.working });
+  step(label, () => {
+    for (const [id, before] of befores) { if (before) void saveLook(before); else removeLook(id); }
+    undos.forEach((u) => u());
+    if (ch.working) void saveSettings({ working: workBefore });
+  }, opts);
 }
 
 /** Change several pieces at once (places on the floor, kinds, order); one undo puts them all back. */

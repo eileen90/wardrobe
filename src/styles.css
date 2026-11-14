@@ -1813,3 +1813,352 @@ kbd.pill.is-key {
     transition: none !important;
   }
 }
+
+/* ==================================================================
+   The looks board and the edit frame (one gesture model on every canvas)
+   ================================================================== */
+
+/* Selected: a frame with handles, drawn on screen over the piece. */
+.canvas.has-frame:not(.has-group) .piece.is-selected .piece__in::before {
+  box-shadow: none;
+  background: transparent;
+}
+.canvas.has-frame .piece.is-selected .piece__in::after {
+  transform: scale(0);
+}
+.frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 50% 50%;
+  border: 1.5px solid var(--blue);
+  border-radius: 3px;
+  pointer-events: none;
+  animation: fade 0.18s var(--ease) both;
+}
+.frame.is-group {
+  border-style: dashed;
+}
+.frame__corner,
+.frame__turn {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+}
+.frame__corner {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--blue);
+  border-radius: 2px;
+  background: #fff;
+}
+.frame__corner.is-nw { left: -6px; top: -6px; cursor: nwse-resize; }
+.frame__corner.is-ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.frame__corner.is-sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.frame__corner.is-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.frame__corner::after,
+.frame__turn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.frame__turn {
+  left: 50%;
+  top: -30px;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  border: 1.5px solid var(--blue);
+  border-radius: 50%;
+  background: #fff;
+  cursor: grab;
+}
+.frame__turn::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1.5px;
+  height: 16px;
+  margin-left: -0.75px;
+  background: var(--blue);
+}
+/* The quiet toolbar by the selection. */
+.toolbar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 10px 22px -14px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
+  white-space: nowrap;
+  animation: fade 0.2s var(--ease) both;
+}
+.toolbar.is-below {
+  transform: translate(-50%, 0);
+}
+.hud__btn.is-word {
+  width: auto;
+  padding: 0 11px;
+  border-radius: 15px;
+  font-size: 13px;
+}
+.hud__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--faint);
+}
+/* Where a carried piece lines up with its neighbours. */
+.guide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  background: var(--blue);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.guide.is-x {
+  width: 1px;
+}
+.guide.is-y {
+  height: 1px;
+}
+.kept {
+  position: absolute;
+  top: calc(-8px * var(--zi, 1));
+  right: calc(-8px * var(--zi, 1));
+  display: grid;
+  place-items: center;
+  width: calc(22px * var(--zi, 1));
+  height: calc(22px * var(--zi, 1));
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  pointer-events: none;
+}
+.kept svg {
+  width: 55%;
+  height: 55%;
+}
+
+/* A saved look's area: its paper, its pieces small, its name over it. */
+.area {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  box-shadow: 0 30px 44px -34px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  contain: layout style;
+}
+.area__pieces {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.area__name {
+  position: absolute;
+  left: 2px;
+  bottom: 100%;
+  margin-bottom: calc(6px * var(--zl, 1));
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(12px * var(--zl, 1));
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.area__empty {
+  position: absolute;
+  inset: 12%;
+  border: calc(1px * var(--zi, 1)) dashed var(--faint);
+  border-radius: 10px;
+}
+.area.is-outfit {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 calc(1px * var(--zi, 1)) rgba(0, 0, 0, 0.12);
+  border-radius: 28px;
+}
+/* The look being worked on: its paper lies under its pieces. */
+.area.is-in {
+  inset: auto;
+  top: 0;
+  left: 0;
+  box-shadow: 0 36px 60px -40px rgba(0, 0, 0, 0.6), 0 0 0 calc(1.5px * var(--zi, 1)) rgba(10, 20, 255, 0.35);
+  animation: fade 0.3s var(--ease) both;
+}
+.piece.is-area .piece__in,
+.piece.is-area:active .piece__in,
+.piece.is-area:hover .piece__in {
+  transform: none;
+}
+.piece.is-area {
+  transition: opacity 0.3s;
+}
+.piece.is-area.is-away {
+  opacity: 0.55;
+}
+.piece.is-area.is-away:hover {
+  opacity: 0.85;
+}
+.piece.is-area.is-target .area {
+  box-shadow: 0 0 0 calc(2px * var(--zi, 1)) var(--blue), 0 30px 44px -30px rgba(10, 20, 255, 0.5);
+}
+.piece.is-area.is-target {
+  opacity: 1;
+}
+.piece.is-area.is-new .area {
+  animation: land 0.7s var(--spring) both;
+}
+@keyframes land {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+.piece.is-area.is-selected .piece__in::before {
+  inset: -4px;
+  border-radius: 17px;
+}
+
+/* In a look: its own bar takes the place of the outfit's chips. */
+.lookbar {
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--top) + var(--nav-h) + 18px);
+  left: 50%;
+  width: min(560px, calc(100% - 24px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6), 0 12px 26px -18px rgba(0, 0, 0, 0.45);
+}
+.lookbar .pill.is-back {
+  flex: none;
+  border-style: solid;
+  border-color: transparent;
+  background: rgba(0, 0, 0, 0.05);
+}
+.lookbar__name {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  outline: none;
+  font-size: 17px;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+}
+.lookbar__paper {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0 4px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.iconbtn.is-quiet {
+  width: 36px;
+  height: 36px;
+}
+.iconbtn.is-quiet svg {
+  width: 18px;
+  height: 18px;
+}
+.lookbar__papers {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 40px;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.45);
+  animation: fade 0.2s var(--ease) both;
+}
+.lookbar__papers button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+.lookbar__papers button[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18), 0 0 0 2px #fff, 0 0 0 3.5px var(--blue);
+}
+.looks__start {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.pick__kinds {
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+}
+.pick__none {
+  padding: 28px 10px;
+}
+.round[aria-pressed='true'] {
+  background: var(--ink);
+  color: #fff;
+}
+.round:disabled {
+  opacity: 0.35;
+}
+@media (hover: hover) {
+  .canvas:not(.is-carrying) .piece:not(.is-selected):not(.is-area):hover .piece__in::before {
+    box-shadow: 0 0 0 calc(1px * var(--zi, 1)) rgba(10, 20, 255, 0.28);
+  }
+  .toolbar .hud__btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+}
+@media (pointer: coarse) {
+  .frame__corner {
+    width: 15px;
+    height: 15px;
+  }
+  .frame__corner.is-nw { left: -8px; top: -8px; }
+  .frame__corner.is-ne { right: -8px; top: -8px; }
+  .frame__corner.is-sw { left: -8px; bottom: -8px; }
+  .frame__corner.is-se { right: -8px; bottom: -8px; }
+  .frame__turn {
+    width: 17px;
+    height: 17px;
+    margin-left: -8.5px;
+    top: -36px;
+  }
+  .frame__turn::before {
+    height: 20px;
+  }
+  .toolbar .hud__btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+/* Over the strip of pieces, never on it. */
+.app:has(.looks:not([hidden]) .pick):not(:has(.focus)) .toast {
+  bottom: calc(var(--bottom) + 252px);
+}
