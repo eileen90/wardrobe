@@ -59,7 +59,7 @@ export function layout(pieces: Placed[], find: Find): Placed[] {
 }
 
 /** A box in shares of the board, for finding room. */
-interface B { x: number; y: number; w: number; h: number }
+export interface B { x: number; y: number; w: number; h: number }
 const boxOf = (p: Placed, it: Item): B => ({ x: p.x, y: p.y, w: p.w, h: hOf(p.w, it) });
 function overlap(a: B, b: B) {
   // Cut-outs have empty corners, so the boxes are trimmed a little before they count as touching.
@@ -70,8 +70,8 @@ function overlap(a: B, b: B) {
 }
 
 /** Room for another piece beside `near`, its top edge level with near's: right first, then left. */
-function beside(pieces: Placed[], find: Find, w: number, h: number, near: B): { x: number; y: number } {
-  const others = pieces.flatMap((p) => { const it = find(p.itemId); return it ? [boxOf(p, it)] : []; });
+function beside(pieces: Placed[], find: Find, w: number, h: number, near: B, avoid: B[]): { x: number; y: number } {
+  const others = [...pieces.flatMap((p) => { const it = find(p.itemId); return it ? [boxOf(p, it)] : []; }), ...avoid];
   const y = near.y - near.h / 2 + h / 2;
   const gap = 0.02;
   let best = { x: near.x + near.w / 2 + gap + w / 2, y, hit: Infinity };
@@ -98,7 +98,7 @@ function insert(pieces: Placed[], p: Placed, find: Find): Placed[] {
  * Put another piece on: dropped at a point (shares of the board), or, when none of its kind is
  * worn yet, where a flat lay puts it; otherwise beside the last one of its kind, to compare.
  */
-export function addTo(pieces: Placed[], item: Item, find: Find, at?: { x: number; y: number }): { pieces: Placed[]; id: string } {
+export function addTo(pieces: Placed[], item: Item, find: Find, at?: { x: number; y: number }, avoid: B[] = []): { pieces: Placed[]; id: string } {
   const rail = railOf(item);
   const w = trueW(item);
   const id = uid();
@@ -107,7 +107,7 @@ export function addTo(pieces: Placed[], item: Item, find: Find, at?: { x: number
   const same = pieces.filter((p) => { const it = find(p.itemId); return it && railOf(it) === rail; });
   if (!same.length) return { pieces: layout(insert(pieces, base, find), find), id };
   const last = same[same.length - 1];
-  const spot = beside(pieces, find, w, hOf(w, item), boxOf(last, find(last.itemId)!));
+  const spot = beside(pieces, find, w, hOf(w, item), boxOf(last, find(last.itemId)!), avoid);
   return { pieces: insert(pieces, { ...base, ...spot, byHand: true }, find), id };
 }
 

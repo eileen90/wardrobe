@@ -2158,3 +2158,7 @@ kbd.pill.is-key {
     height: 36px;
   }
 }
+/* Over the strip of pieces, never on it. */
+.app:has(.looks:not([hidden]) .pick):not(:has(.focus)) .toast {
+  bottom: calc(var(--bottom) + 252px);
+}

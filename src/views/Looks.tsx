@@ -100,7 +100,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
 }) {
   const items = useStore((s) => s.items);
   const looks = useStore((s) => s.looks);
-  const fit = useOutfit();
+  const fit = useOutfit(!hidden);
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const [inLook, setInLook] = useState<string | null>(null);
   const [sel, setSel] = useState<Set<string>>(() => new Set());
@@ -188,22 +188,17 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     const it = byId.get(startWith.id);
     if (!it) return;
     if (inLook) go(null);
-    const id = fit.wear(it);
+    const id = fit.wear(it, avoid());
     setSel(new Set([id]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startWith]);
 
-  /** Zoomed in on a look, it opens; zoomed far out of the one open, it closes. */
+  /** Zoomed in far enough on a look, it opens. (Zooming out never closes one: carrying pieces far needs the room.) */
   const viewed = (v: View, size: { w: number; h: number }) => {
     if (hidden || !size.w) return;
     const cx = (size.w / 2 - v.x) / v.z, cy = (size.h / 2 - v.y) / v.z;
     const ls = getState().looks;
-    const cur = inLook ? ls.find((l) => l.id === inLook) : null;
-    if (cur) {
-      const r = areaRect(cur);
-      if ((r.x1 - r.x0) * v.z < size.w * 0.22 && (r.y1 - r.y0) * v.z < size.h * 0.3) go(null, false);
-      return;
-    }
+    if (inLook) return;
     const hit = ls.find((l) => {
       if (!l.at) return false;
       const r = areaRect(l);
@@ -332,10 +327,12 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     return strip === 'all' ? RAILS.flatMap((r) => pools[r.id]) : strip ? pools[strip as RailId] ?? [] : [];
   }, [strip, look, items, fit.pools]);
   const onBoard = useMemo(() => new Set(livePieces.map((p) => p.itemId)), [livePieces]);
+  /** Saved looks' areas, in shares of the outfit's board: new pieces keep clear of them. */
+  const avoid = () => looks.filter((l) => l.at).map((l) => { const r = areaRect(l); return { x: (r.x0 + r.x1) / 2 / BW, y: (r.y0 + r.y1) / 2 / BH, w: (r.x1 - r.x0) / BW, h: (r.y1 - r.y0) / BH }; });
   /** Put a piece on whatever is being worked on: at a world point, or where it belongs. */
   const putOn = (item: Item, at?: { x: number; y: number }) => {
     if (!look) {
-      const id = fit.add(item, at && toFrac(OUTFIT, at.x, at.y));
+      const id = fit.add(item, at && toFrac(OUTFIT, at.x, at.y), avoid());
       setSel(new Set([id]));
       return;
     }
@@ -611,7 +608,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
           <button className="pill is-small" aria-pressed={fit.work.wish} onClick={fit.wish}>wishlist</button>
           {fit.work.kept.length > 0 && <button className="pill is-small" onClick={fit.letGo}><Icon name="unlock" />let go</button>}
           {RAILS.filter((r) => fit.pools[r.id].length).map((r) => (
-            <button key={r.id} className="pill is-small is-add" onClick={() => putOn(fit.unworn(r.id))} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>
+            <button key={r.id} className="pill is-small is-add" disabled={!fit.unworn(r.id)} onClick={() => { const it = fit.unworn(r.id); if (it) putOn(it); }} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>
           ))}
         </div>
       )}

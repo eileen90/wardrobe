@@ -5,7 +5,7 @@
 import { useEffect, useMemo } from 'react';
 import { changeBoard } from '../lib/actions';
 import { editPieces, labelOf, type Edit, type EditArg } from '../lib/boards';
-import { addTo, anyOther, EMPTY, finder, layout, nextOf, RAIL, RAILS, railOf, swap, upgradeWorking, type RailId } from '../lib/outfit';
+import { addTo, anyOther, type B, EMPTY, finder, layout, nextOf, RAIL, RAILS, railOf, swap, upgradeWorking, type RailId } from '../lib/outfit';
 import { getState, saveSettings, useStore } from '../lib/store';
 import type { Item, Placed, WorkingLook } from '../lib/types';
 
@@ -15,7 +15,7 @@ export const poolsOf = (items: Item[], wish: boolean): Pools => {
   return Object.fromEntries(RAILS.map((r) => [r.id, ready.filter((i) => (r.cats as readonly string[]).includes(i.category))])) as Pools;
 };
 
-export function useOutfit() {
+export function useOutfit(shown = true) {
   const items = useStore((s) => s.items);
   const stored = useStore((s) => s.settings.working);
   const find = useMemo(() => finder(items), [items]);
@@ -45,30 +45,31 @@ export function useOutfit() {
     return ps;
   };
   useEffect(() => {
-    if (stored || !anything) return;
+    // (Only once the page is seen, so pieces still arriving are there to choose from.)
+    if (stored || !anything || !shown) return;
     void saveSettings({ working: { ...EMPTY, pieces: start() } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anything, !!stored]);
+  }, [anything, !!stored, shown]);
 
   return {
     work, pieces, pools, anything, find, rail,
     start: () => setPieces(start(), 'Started an outfit'),
     /** Put another piece on (at a point on the board, in shares of it). Returns its id. */
-    add: (item: Item, at?: { x: number; y: number }) => {
-      const r = addTo(cur().pieces, item, find, at);
+    add: (item: Item, at?: { x: number; y: number }, avoid: B[] = []) => {
+      const r = addTo(cur().pieces, item, find, at, avoid);
       setPieces(r.pieces, `Put on the ${RAIL[railOf(item)].label}`);
       if (item.status === 'wish' && !cur().wish) void saveSettings({ working: { ...cur(), wish: true } });
       return r.id;
     },
     /** The next piece of a kind nobody is wearing yet. */
-    unworn: (r: RailId) => pools[r].find((i) => !worn(cur().pieces).has(i.id)) ?? pools[r][0],
+    unworn: (r: RailId): Item | null => pools[r].find((i) => !worn(cur().pieces).has(i.id)) ?? null,
     /** Put a piece on from its page: in place of the first of its kind not kept, else beside it. */
-    wear: (item: Item): string => {
+    wear: (item: Item, avoid: B[] = []): string => {
       const w = cur();
       const r = railOf(item);
       const p = w.pieces.find((q) => rail(q) === r && !w.kept.includes(q.id));
       if (!p) {
-        const a = addTo(w.pieces, item, find);
+        const a = addTo(w.pieces, item, find, undefined, avoid);
         setPieces(a.pieces, `Put on the ${RAIL[r].label}`);
         return a.id;
       }
