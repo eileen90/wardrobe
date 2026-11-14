@@ -3,11 +3,10 @@ import { stopStudio } from './lib/actions';
 import { undoLast, useLastStep } from './lib/history';
 import { cancelFetching, takeTransfer } from './lib/intake';
 import { hint, isKey, typing, useBindings } from './lib/shortcuts';
-import { getState, load, removeLook, useStore } from './lib/store';
+import { load, useStore } from './lib/store';
 import { resume, tryAgain, useStudio } from './lib/studio';
 import { dismissToast, Icon, Toast, useToasting } from './ui';
 import { Add, tell } from './views/Add';
-import { Board } from './views/Board';
 import { Closet } from './views/Closet';
 import { Focus } from './views/Focus';
 import { Looks, PickLook } from './views/Looks';
@@ -30,7 +29,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('closet');
   const [focus, setFocus] = useState<{ id: string; from: DOMRect | null; sequence: string[] } | null>(null);
   const [adding, setAdding] = useState(false);
-  const [board, setBoard] = useState<string | null>(null);
+  const [enter, setEnter] = useState<{ id: string } | null>(null);
   const [wear, setWear] = useState<{ id: string } | null>(null);
   const [toLook, setToLook] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
@@ -102,9 +101,9 @@ export function App() {
 
   if (!ready) return <div className="app" />;
 
-  const covered = !!focus || !!board;
+  const covered = !!focus;
   const openFocus = (id: string, from: DOMRect, sequence: string[]) => setFocus({ id, from, sequence });
-  const openBoard = (id: string) => { dismissToast(); setToLook(null); setFocus(null); setTab('looks'); setBoard(id); };
+  const openLook = (id: string) => { dismissToast(); setToLook(null); setFocus(null); setTab('looks'); setEnter({ id }); };
 
   // One quiet line about what the studio is up to. Nothing here needs doing, except a bad key.
   const n = studio.left;
@@ -136,7 +135,7 @@ export function App() {
       <Closet hidden={tab !== 'closet'} active={tab === 'closet' && !covered && !adding} onAdd={() => setAdding(true)}
         onOpen={openFocus} />
       <Looks hidden={tab !== 'looks'} active={tab === 'looks' && !covered && !adding && !toLook}
-        startWith={wear} onOpen={openBoard} onFocus={openFocus} onAdd={() => setAdding(true)} />
+        startWith={wear} enter={enter} onFocus={openFocus} onAdd={() => setAdding(true)} />
       <Settings hidden={tab !== 'settings'} />
 
       {!covered && !toasting && tab !== 'settings' && line && quiet !== line.text && (
@@ -148,7 +147,6 @@ export function App() {
         </div>
       )}
 
-      {board && <Board key={board} id={board} onClose={() => setBoard(null)} onFocus={openFocus} />}
       {focus && (
         <Focus
           id={focus.id}
@@ -156,20 +154,16 @@ export function App() {
           sequence={focus.sequence}
           onGo={(id) => setFocus({ ...focus, id })}
           onClose={() => setFocus(null)}
-          onWear={(id) => { setFocus(null); setBoard(null); setWear({ id }); setTab('looks'); }}
+          onWear={(id) => { setFocus(null); setWear({ id }); setTab('looks'); }}
           onAddToLook={(id) => setToLook(id)}
         />
       )}
 
       <Add open={adding} onClose={() => setAdding(false)} />
-      <PickLook itemId={toLook} onClose={() => setToLook(null)} onOpen={openBoard} />
+      <PickLook itemId={toLook} onClose={() => setToLook(null)} onOpen={openLook} />
       <ShortcutsSheet open={keys} onClose={() => setKeys(false)} onChange={() => {
         setKeys(false);
         setFocus(null);
-        // A board nobody put anything on isn't kept, as when it is closed.
-        const b = board && getState().looks.find((l) => l.id === board);
-        if (b && !b.pieces.length) removeLook(b.id);
-        setBoard(null);
         setTab('settings');
         setTimeout(() => document.getElementById('shortcuts')?.scrollIntoView({ behavior: 'smooth' }), 50);
       }} />

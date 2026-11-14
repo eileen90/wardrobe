@@ -244,19 +244,41 @@ export function fitBoard(pieces: Placed[], items: Item[], grow = 1): Placed[] {
 
 /** What can be done to pieces lying on a canvas, besides moving and resizing them. */
 export type PieceAction = 'remove' | 'forward' | 'backward' | 'flip' | 'duplicate';
-export type Edit = PieceAction | 'move' | 'resize';
+export type Edit = PieceAction | 'move' | 'resize' | 'rotate' | 'transform';
+export interface EditArg {
+  dx?: number; dy?: number; k?: number; deg?: number;
+  /** the point a group turns and grows about, in board units (BW × BH) */
+  px?: number; py?: number;
+}
+
+const turn = (r: number) => { const a = ((r % 360) + 540) % 360 - 180; return Math.abs(a) < 0.01 ? 0 : a; };
 
 /**
  * A look's pieces after a change. Shared by saved looks and the looks page, so moving,
- * resizing, layering, flipping and removing mean the same on both.
+ * resizing, turning, layering, flipping and removing mean the same everywhere.
  */
-export function editPieces(pieces: Placed[], a: Edit, ids: string[], arg: { dx?: number; dy?: number; k?: number } = {}): Placed[] | null {
+export function editPieces(pieces: Placed[], a: Edit, ids: string[], arg: EditArg = {}): Placed[] | null {
   const on = new Set(ids);
   switch (a) {
     case 'move':
       return pieces.map((p) => (on.has(p.id) ? { ...p, x: p.x + (arg.dx ?? 0) / BW, y: p.y + (arg.dy ?? 0) / BH, byHand: true } : p));
     case 'resize':
       return pieces.map((p) => (on.has(p.id) ? { ...p, w: Math.min(2, Math.max(0.03, p.w * (arg.k ?? 1))), byHand: true } : p));
+    case 'rotate':
+      return pieces.map((p) => (on.has(p.id) ? { ...p, rot: turn(p.rot + (arg.deg ?? 0)), byHand: true } : p));
+    case 'transform': {
+      // Grown and turned together about one point, as if they were glued to one sheet.
+      const k = arg.k ?? 1, deg = arg.deg ?? 0, t = (deg * Math.PI) / 180;
+      const c = Math.cos(t), sn = Math.sin(t);
+      const px = arg.px ?? 0, py = arg.py ?? 0;
+      return pieces.map((p) => {
+        if (!on.has(p.id)) return p;
+        const x = p.x * BW - px, y = p.y * BH - py;
+        const w = Math.min(2, Math.max(0.03, p.w * k));
+        const kk = w / p.w;
+        return { ...p, x: (px + (x * c - y * sn) * kk) / BW, y: (py + (x * sn + y * c) * kk) / BH, w, rot: turn(p.rot + deg), byHand: true };
+      });
+    }
     case 'remove':
       return pieces.filter((p) => !on.has(p.id));
     case 'forward':
@@ -266,10 +288,56 @@ export function editPieces(pieces: Placed[], a: Edit, ids: string[], arg: { dx?:
     case 'flip':
       return pieces.map((p) => (on.has(p.id) ? { ...p, flip: !p.flip } : p));
     case 'duplicate':
-      return [...pieces, ...pieces.filter((p) => on.has(p.id)).map((p) => ({ ...p, id: uid(), x: p.x + 0.05, y: p.y + 0.04 }))];
+      return [...pieces, ...pieces.filter((p) => on.has(p.id)).map((p) => ({ ...p, id: uid(), x: p.x + 0.05, y: p.y + 0.04, byHand: true }))];
   }
 }
 /** What every change is called, in its toast and its undo, wherever it is made. */
 export const LABELS: Record<Edit, string> = {
-  move: 'Moved', resize: 'Resized', remove: 'Removed', forward: 'Brought forward', backward: 'Sent back', flip: 'Flipped', duplicate: 'Copied',
+  move: 'Moved', resize: 'Resized', rotate: 'Turned', transform: 'Resized', remove: 'Removed', forward: 'Brought forward',
+  backward: 'Sent back', flip: 'Flipped', duplicate: 'Copied',
 };
+
+/* ---------- the looks board: the outfit in the middle, every saved look around it ---------- */
+
+/** How big a saved look's area is drawn, as a share of a full board, unless resized. */
+export const AREA_S = 0.42;
+const GAP = 70;
+export const areaScale = (l: Pick<Look, 's'>) => l.s ?? AREA_S;
+
+export interface Rect { x0: number; y0: number; x1: number; y1: number }
+const meets = (a: Rect, b: Rect) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+/** A saved look's area on the board, in board units. */
+export function areaRect(l: Pick<Look, 's' | 'at'>): Rect {
+  const s = areaScale(l), at = l.at ?? { x: 0, y: 0 };
+  return { x0: at.x, y0: at.y, x1: at.x + BW * s, y1: at.y + BH * s };
+}
+
+/**
+ * The nearest free place for a new area of scale `s`: beside the outfit first, then in rings
+ * around it, never over the outfit or another area.
+ */
+export function freeSpot(taken: Rect[], outfit: Rect, s = AREA_S): { x: number; y: number } {
+  const w = BW * s, h = BH * s;
+  const cx = (outfit.x0 + outfit.x1) / 2, cy = (outfit.y0 + outfit.y1) / 2;
+  const pad = { x0: outfit.x0 - GAP, y0: outfit.y0 - GAP, x1: outfit.x1 + GAP, y1: outfit.y1 + GAP };
+  const sx = w + GAP, sy = h + GAP;
+  const cells: { x: number; y: number; d: number }[] = [];
+  const add = (x: number, y: number) => cells.push({ x, y, d: Math.hypot((x + w / 2 - cx) * 0.8, (y + h / 2 - cy) * 1.2) });
+  // Columns just clear of the outfit on either side, rows lined up with its top...
+  for (let j = -6; j <= 6; j++) for (let i = 0; i < 8; i++) { add(pad.x1 + i * sx, outfit.y0 + j * sy); add(pad.x0 - w - i * sx, outfit.y0 + j * sy); }
+  // ...and rows under and over it.
+  for (let j = 0; j < 5; j++) for (let i = -2; i <= 1; i++) { add(cx + i * sx + GAP / 2, pad.y1 + j * sy); add(cx + i * sx + GAP / 2, pad.y0 - h - j * sy); }
+  cells.sort((a, b) => a.d - b.d);
+  for (const c of cells) {
+    const r = { x0: c.x - GAP / 3, y0: c.y - GAP / 3, x1: c.x + w + GAP / 3, y1: c.y + h + GAP / 3 };
+    if (meets(r, pad) || taken.some((t) => meets(r, t))) continue;
+    return { x: c.x, y: c.y };
+  }
+  const right = Math.max(outfit.x1, ...taken.map((t) => t.x1));
+  return { x: right + GAP, y: outfit.y0 };
+}
+
+/** What a change is called; growing and turning together reads as a turn when nothing grew. */
+export const labelOf = (a: Edit, arg: EditArg = {}) =>
+  a === 'transform' && Math.abs((arg.k ?? 1) - 1) < 0.005 ? LABELS.rotate : LABELS[a];
