@@ -1,17 +1,18 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { editMany, redoMany, removeMany } from '../lib/actions';
 import { isKey } from '../lib/shortcuts';
 import { useStore } from '../lib/store';
 import { CATEGORIES } from '../lib/types';
-import { Icon } from '../ui';
+import { Icon, NoteField, useArmed } from '../ui';
 import type { PieceAction } from '../lib/boards';
 
 /** The bar that takes the dock's place while pieces are selected, on every screen. */
-function SelectionBar({ n, total, onAll, onClear, panel, children }: {
+function SelectionBar({ n, total, onAll, onClear, panel, children, bar }: {
   n: number; total: number; onAll: () => void; onClear: () => void; panel?: ReactNode; children: ReactNode;
+  bar?: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
-    <div className="selbar glass" role="toolbar" aria-label="Selected pieces">
+    <div className="selbar glass" role="toolbar" aria-label="Selected pieces" ref={bar}>
       {panel}
       <div className="selbar__head">
         <b className="num">{n} selected</b>
@@ -31,6 +32,10 @@ export function ClosetSelection({ ids, total, onAll, onClear }: {
 }) {
   const hasKey = useStore((s) => !!s.settings.key);
   const [moving, setMoving] = useState(false);
+  const bar = useRef<HTMLDivElement>(null);
+  const [arming, setArming] = useArmed(bar);
+  const [note, setNote] = useState('');
+  useEffect(() => { if (!arming) setNote(''); }, [arming]);
   const n = ids.length;
 
   useEffect(() => {
@@ -42,13 +47,19 @@ export function ClosetSelection({ ids, total, onAll, onClear }: {
   }, [moving]);
 
   const done = () => { setMoving(false); onClear(); };
-  // Pieces sorted by hand keep their kind; the rest are looked at again.
+  // Pieces sorted by hand keep their kind; the rest are looked at again. One note for all of them.
   const redo = () => {
-    void redoMany(ids, {}, { recheckKind: true });
+    if (!arming) { setMoving(false); return setArming(true); }
+    void redoMany(ids, note.trim() ? { note: note.trim() } : {}, { recheckKind: true });
+    setArming(false);
     done();
   };
 
-  const panel = moving && (
+  const panel = arming ? (
+    <div className="selbar__note">
+      <NoteField value={note} onChange={setNote} onGo={redo} onCancel={() => setArming(false)} />
+    </div>
+  ) : moving && (
     <div className="chips selbar__panel" role="group" aria-label="Move to">
       {CATEGORIES.map((c) => (
         <button key={c.id} className="pill"
@@ -60,9 +71,9 @@ export function ClosetSelection({ ids, total, onAll, onClear }: {
     </div>
   );
   return (
-    <SelectionBar n={n} total={total} onAll={onAll} onClear={onClear} panel={panel}>
-      {hasKey && <button className="pill" onClick={redo}><Icon name="turn" />redo</button>}
-      <button className={'pill' + (moving ? ' is-on' : '')} aria-expanded={moving} onClick={() => setMoving(!moving)}>
+    <SelectionBar n={n} total={total} onAll={onAll} onClear={onClear} panel={panel} bar={bar}>
+      {hasKey && <button className={'pill' + (arming ? ' is-on' : '')} onClick={redo}><Icon name="turn" />{arming ? 'redo ' + n : 'redo'}</button>}
+      <button className={'pill' + (moving ? ' is-on' : '')} aria-expanded={moving} onClick={() => { setArming(false); setMoving(!moving); }}>
         move to
       </button>
       <button className="pill" onClick={() => { editMany(ids, { status: 'owned' }, { label: `${n} marked as mine` }); done(); }}>mine</button>

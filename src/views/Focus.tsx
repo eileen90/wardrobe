@@ -5,7 +5,7 @@ import { CURRENCIES, groupDigits, parsePrice, signOf } from '../lib/money';
 import { covered, isDone, isKey } from '../lib/shortcuts';
 import { saveSettings, useStore } from '../lib/store';
 import { CATEGORIES, type Item } from '../lib/types';
-import { Garment, Icon, toast } from '../ui';
+import { Garment, Icon, NoteField, toast, useArmed } from '../ui';
 
 /** A text field that saves as you leave it, so typing never fights the store. */
 function Field({ value, onSave, placeholder, area, className, label }: {
@@ -93,6 +93,29 @@ function LinkField({ item }: { item: Item }) {
       onPaste={(e) => { const t = e.clipboardData.getData('text'); if (cleanUrl(t)) { e.preventDefault(); commit(t); } }}
       onBlur={() => commit(v)}
       onKeyDown={(e) => isDone(e) && e.currentTarget.blur()} />
+  );
+}
+
+/**
+ * Redo the picture: the first press arms it and opens a field for what went wrong, the second
+ * press (or Enter) sends it, with or without a note.
+ */
+function Redo({ id }: { id: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [armed, setArmed] = useArmed(box);
+  const [note, setNote] = useState('');
+  useEffect(() => { if (!armed) setNote(''); }, [armed]);
+  const go = () => {
+    setArmed(false);
+    void redoPiece(id, note.trim() ? { note: note.trim() } : {});
+  };
+  return (
+    <div ref={box} className={'redo' + (armed ? ' is-armed' : '')}>
+      {armed && <NoteField value={note} onChange={setNote} onGo={go} onCancel={() => setArmed(false)} />}
+      <button className={'pill' + (armed ? ' is-on' : '')} onClick={() => (armed ? go() : setArmed(true))}>
+        <Icon name="turn" />{armed ? 'redo' : 'redo the picture'}
+      </button>
+    </div>
   );
 }
 
@@ -247,9 +270,7 @@ export function Focus({ id, from, sequence, onGo, onClose, onWear, onAddToLook }
             <button className="pill is-on" onClick={() => onAddToLook(item.id)}>add to a look</button>
             <button className="pill" disabled={item.state !== 'ready'} onClick={() => onWear(item.id)}>put it on</button>
             {hasKey && !waiting && (
-              <button className="pill" onClick={() => void redoPiece(item.id)}>
-                <Icon name="turn" />redo the picture
-              </button>
+              <Redo key={item.id} id={item.id} />
             )}
             {waiting && (
               <button className="pill" onClick={() => void stopStudio([item.id])}><Icon name="x" />stop cleaning</button>

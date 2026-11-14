@@ -60,14 +60,22 @@ const HEM: Record<Length, string> = {
 
 const WORN = (c: Category) => c === 'outer' || c === 'top' || c === 'dress' || c === 'bottom';
 
-export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length' | 'kindSure'>, backdrop: string, fixes = '') {
+/**
+ * What the owner said was wrong, said first and as the one thing that matters most: tucked in at
+ * the end of a long prompt it was mostly ignored.
+ */
+const ownerSays = (note: string) =>
+  note.trim() && `Most important, from the owner who knows this piece: ${note.trim().replace(/[.!\s]+$/, '')}. Follow this exactly.`;
+
+export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length' | 'kindSure'>, backdrop: string, fixes = '', note = '') {
   // Unsure what it is: say nothing about sleeves or mannequins, or a backpack grows arms.
-  if (item.kindSure === false) return unsurePrompt(backdrop, fixes);
+  if (item.kindSure === false) return unsurePrompt(backdrop, fixes, note);
   const worn = WORN(item.category);
   const hem = worn && item.length ? `, ${HEM[item.length]}` : '';
   const what = item.name.trim() ? `${item.name.trim()} (${NOUN[item.category]}${hem})` : `${NOUN[item.category]}${hem}`;
   return [
     `Recreate exactly this ${what} as a professional e-commerce product photo of the item alone.`,
+    ownerSays(note),
     POSE[item.category],
     worn
       ? 'Keep its true proportions and its full length from top to hem exactly as in the photo: do not shorten, lengthen, crop or resize it.'
@@ -79,6 +87,7 @@ export function studioPrompt(item: Pick<Item, 'category' | 'name' | 'length' | '
     'No hanger, no person, no body parts, no other objects, no text, no watermark.',
     backdropWords(backdrop),
     fixes && `A previous attempt got details wrong. Be sure to: ${fixes}`,
+    ownerSays(note),
   ].filter(Boolean).join(' ');
 }
 
@@ -104,9 +113,10 @@ const backdropWords = (backdrop: string) =>
 const KEEP_KIND =
   'It stays exactly the same kind of object as in the photo. Never add sleeves, arms, hands, a body, a head, a mannequin or any part the item does not have.';
 
-function unsurePrompt(backdrop: string, fixes: string) {
+function unsurePrompt(backdrop: string, fixes: string, note: string) {
   return [
     'Recreate exactly this item as a professional e-commerce product photo of the item alone, whatever kind of item it is.',
+    ownerSays(note),
     'Perfectly straight front view, laid out or standing the way such an item is usually photographed for a shop.',
     'Keep its true shape, size and proportions exactly as in the photo.',
     'The whole item is visible and centred, with empty background margin on all four sides. Do not stretch it to fill the frame.',
@@ -115,6 +125,7 @@ function unsurePrompt(backdrop: string, fixes: string) {
     'No hanger, no person, no other objects, no text, no watermark.',
     backdropWords(backdrop),
     fixes && `A previous attempt got details wrong. Be sure to: ${fixes}`,
+    ownerSays(note),
   ].filter(Boolean).join(' ');
 }
 
@@ -261,13 +272,14 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
       const dataUrl = await blobToDataUrl(await flatJpeg(photo, 0.9));
       const size = frameFor(item, photo.width / photo.height);
       // Redoing a piece that already has a picture: look at what went wrong with it first.
-      let fixes = wish?.note?.trim() ?? '';
+      const note = wish?.note?.trim() ?? '';
+      let fixes = '';
       const before = wish && (await db.getBlob(`${id}:cut`));
       if (before) {
         try {
-          const seen = await critique(key, await blobToDataUrl(await flatJpeg(photo, 0.85)),
-            await blobToDataUrl(await flatJpeg(scaled(await loadImage(before), 1024), 0.85)), fixes, signal);
-          fixes = [fixes, seen].filter(Boolean).join('. ');
+          // The critique is told the note too, so its fixes follow what she saw.
+          fixes = await critique(key, await blobToDataUrl(await flatJpeg(photo, 0.85)),
+            await blobToDataUrl(await flatJpeg(scaled(await loadImage(before), 1024), 0.85)), note, signal);
         } catch (e) {
           if (!(e instanceof StudioError) || (e.kind !== 'fail' && e.kind !== 'credits')) throw e;
         }
@@ -277,7 +289,7 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
       const tries = rankBackdrops(photo).slice(0, 2);
       let spare: HTMLCanvasElement | null = null;
       for (const [n, b] of tries.entries()) {
-        const out = await remake({ key, model, photo: dataUrl, size, signal, prompt: studioPrompt(item, b.words, fixes) });
+        const out = await remake({ key, model, photo: dataUrl, size, signal, prompt: studioPrompt(item, b.words, fixes, note) });
         const shot = scaled(await loadImage(out), CUT_MAX);
         // A photo without any of the backdrop's colour: whatever of it is on the remake is
         // light the model bounced off its backdrop, and comes off everywhere.

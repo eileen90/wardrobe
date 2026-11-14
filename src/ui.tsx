@@ -180,3 +180,32 @@ export function useViewport() {
   }, []);
   return v;
 }
+
+/* ---------- a button that asks for a note on its second press ---------- */
+
+/** True while armed; any press outside `ref` (or Escape in the field) lets go. */
+export function useArmed(ref: React.RefObject<HTMLElement | null>) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const out = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setArmed(false); };
+    document.addEventListener('pointerdown', out, true);
+    return () => document.removeEventListener('pointerdown', out, true);
+  }, [armed, ref]);
+  return [armed, setArmed] as const;
+}
+
+/** The optional note a second press sends along. Enter sends it; Escape lets go. */
+export function NoteField({ value, onChange, onGo, onCancel, placeholder = "what's wrong? (optional)" }: {
+  value: string; onChange: (v: string) => void; onGo: () => void; onCancel: () => void; placeholder?: string;
+}) {
+  return (
+    <input className="notefield" value={value} placeholder={placeholder} aria-label="What's wrong" autoFocus
+      enterKeyHint="go" autoCorrect="off" maxLength={300}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); onGo(); }
+        else if (isKey(e, 'close', { inField: true })) { e.preventDefault(); e.stopPropagation(); onCancel(); }
+      }} />
+  );
+}
