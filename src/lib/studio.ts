@@ -18,7 +18,7 @@
 import { useSyncExternalStore } from 'react';
 import * as db from './db';
 import { blobToDataUrl, flatJpeg, loadImage, makeCanvas, scaled, toBlob } from './img';
-import { cutOut, hasPlainBackdrop, hasTransparency, palette, rankBackdrops, trim } from './key';
+import { cutOut, drift, hasPlainBackdrop, hasTransparency, palette, rankBackdrops, trim } from './key';
 import { kindFromShape } from './kind';
 import { balance, critique, look, remake, StudioError, type StudioFault } from './pollinations';
 import { addItem, getItem, getState, refreshPics, updateItem } from './store';
@@ -272,19 +272,26 @@ async function develop(id: string, signal: AbortSignal): Promise<void> {
           if (!(e instanceof StudioError) || (e.kind !== 'fail' && e.kind !== 'credits')) throw e;
         }
       }
-      // A second backdrop is tried only if the first result cannot be cut out.
-      for (const b of rankBackdrops(photo).slice(0, 2)) {
+      // A second backdrop is tried only when the first result can't be cut out or fails the
+      // check below; never more than one extra drawing per piece.
+      const tries = rankBackdrops(photo).slice(0, 2);
+      let spare: HTMLCanvasElement | null = null;
+      for (const [n, b] of tries.entries()) {
         const out = await remake({ key, model, photo: dataUrl, size, signal, prompt: studioPrompt(item, b.words, fixes) });
         const shot = scaled(await loadImage(out), CUT_MAX);
         // A photo without any of the backdrop's colour: whatever of it is on the remake is
         // light the model bounced off its backdrop, and comes off everywhere.
         const res = cutOut(shot, b.share < 0.02);
-        if (res) {
-          cut = res.canvas;
-          remade = true;
-          break;
-        }
+        if (!res) continue;
+        // Checked by code before it is kept: much of the piece in the backdrop's own colour (the
+        // key could not tell them apart well), or a colour far from the photo's.
+        const doubtful = res.inside > 0.08 || drift(photo, res.canvas) > 50;
+        if (doubtful && n < tries.length - 1) { spare = spare ?? res.canvas; continue; }
+        cut = res.canvas;
+        remade = true;
+        break;
       }
+      if (!cut && spare) { cut = spare; remade = true; }
       if (!cut) problem = "This photo couldn't be separated from its background. Another photo of it may work.";
     }
   }

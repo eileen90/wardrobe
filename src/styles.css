@@ -810,7 +810,8 @@ img {
   text-align: center;
 }
 .empty svg.mark {
-  width: 132px;
+  width: 88px;
+  height: auto;
   color: var(--blue);
 }
 .empty p {

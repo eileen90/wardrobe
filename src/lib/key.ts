@@ -18,6 +18,11 @@ export interface Cut {
    * where only a faint outline told them apart. High for a white sneaker on white.
    */
   doubt: number;
+  /**
+   * Chroma keys only: share of the piece whose colour is close to the backdrop's, which the key
+   * would have eaten into had it gone by colour alone. High means the backdrop was a poor choice.
+   */
+  inside: number;
 }
 
 /* ---------- backdrop sampling ---------- */
@@ -108,6 +113,87 @@ function chromaAlpha(d: ImageData, k: RGB): Uint8ClampedArray {
     out[p] = a <= 0 ? 0 : a >= 1 ? 255 : a * 255;
   }
   return out;
+}
+
+/** Sum of a 0/1 mask over a (2r+1)² square around every pixel, by integral image. */
+function boxCount(m: Uint8Array, w: number, h: number, r: number): Int32Array {
+  const I = new Int32Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let row = 0;
+    for (let x = 0; x < w; x++) {
+      row += m[y * w + x];
+      I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row;
+    }
+  }
+  const out = new Int32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+      out[y * w + x] = I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0];
+    }
+  }
+  return out;
+}
+
+/**
+ * Only backdrop takes the key. A pixel of the backdrop's colour inside the piece (the blue of
+ * a blue-and-white striped shirt, a sheen in a crease) is part of the piece: the key judged by
+ * colour alone made such shirts see-through and grey, with speckles all down the stripes.
+ * Backdrop is what is wide open: reached from the frame's edge, or a large enclosed gap (inside
+ * a bag's handle, between an arm and the body), through stretches of backdrop at least 9 px
+ * across, which a stripe, a seam or a crease never is. Near that backdrop the soft edge stays as
+ * keyed; everywhere else the piece is solid, unless a pixel is the backdrop's exact flat colour.
+ * Returns the share of the piece that the colour key alone would have eaten into.
+ */
+function onlyBackdrop(a: Uint8ClampedArray, d: ImageData, k: RGB): number {
+  const { width: w, height: h, data } = d;
+  const n = w * h;
+  const R = Math.max(3, Math.round(Math.min(w, h) / 300));
+  const bg = new Uint8Array(n);
+  for (let p = 0; p < n; p++) bg[p] = a[p] < 64 ? 1 : 0;
+  // Opening: wide-open backdrop only.
+  const full = (2 * R + 1) ** 2;
+  const c1 = boxCount(bg, w, h, R);
+  const core = new Uint8Array(n);
+  for (let p = 0; p < n; p++) core[p] = c1[p] === full ? 1 : 0;
+  const c2 = boxCount(core, w, h, R);
+  const open = new Uint8Array(n);
+  for (let p = 0; p < n; p++) open[p] = c2[p] > 0 && bg[p] ? 1 : 0;
+  // Its pieces that touch the frame or are big enough to be a real gap.
+  const keep = new Uint8Array(n);
+  const seen = new Uint8Array(n);
+  const stack = new Int32Array(n);
+  const comp = new Int32Array(n);
+  for (let s0 = 0; s0 < n; s0++) {
+    if (!open[s0] || seen[s0]) continue;
+    let len = 0, t = 0, edge = false;
+    stack[t++] = s0; seen[s0] = 1;
+    while (t) {
+      const p = stack[--t];
+      comp[len++] = p;
+      const x = p % w;
+      if (x === 0 || x === w - 1 || p < w || p >= n - w) edge = true;
+      if (x > 0 && open[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[t++] = p - 1; }
+      if (x < w - 1 && open[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[t++] = p + 1; }
+      if (p >= w && open[p - w] && !seen[p - w]) { seen[p - w] = 1; stack[t++] = p - w; }
+      if (p < n - w && open[p + w] && !seen[p + w]) { seen[p + w] = 1; stack[t++] = p + w; }
+    }
+    if (edge || len > n * 0.0015) for (let i = 0; i < len; i++) keep[comp[i]] = 1;
+  }
+  // The soft edge next to it keeps its key.
+  const near = boxCount(keep, w, h, R + 2);
+  let piece = 0, eaten = 0;
+  for (let p = 0, i = 0; p < n; p++, i += 4) {
+    if (near[p] > 0) continue;
+    piece++;
+    if (a[p] === 255) continue;
+    const flat = Math.abs(data[i] - k[0]) + Math.abs(data[i + 1] - k[1]) + Math.abs(data[i + 2] - k[2]) < 40;
+    if (flat) continue;
+    if (a[p] < 200) eaten++;
+    a[p] = 255;
+  }
+  return piece ? eaten / piece : 0;
 }
 
 /**
@@ -371,6 +457,25 @@ function refineEdge(a: Uint8ClampedArray, w: number, h: number) {
   }
 }
 
+/**
+ * Share of the solid piece that has the backdrop's hue in its mid and light tones. Reflected
+ * backdrop light shows in the dark tones (the underside of a black bag); a backdrop's hue in
+ * the light tones is the piece's own colour (a pale blue shirt that a warm photo showed grey).
+ */
+function hueShare(d: ImageData, a: Uint8ClampedArray, k: RGB) {
+  const data = d.data;
+  const kh = hueOf(k[0], k[1], k[2]).h;
+  let solid = 0, like = 0;
+  for (let p = 0, i = 0; p < a.length; p += 3, i += 12) {
+    if (a[p] < 250) continue;
+    solid++;
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    if ((r + g + b) / 3 < 100 || Math.max(r, g, b) - Math.min(r, g, b) < 20) continue;
+    if (Math.abs(((hueOf(r, g, b).h - kh + 540) % 360) - 180) < 40) like++;
+  }
+  return solid ? like / solid : 0;
+}
+
 /** Remove the backdrop's tint from the pixels along the edge. */
 function despill(d: ImageData, a: Uint8ClampedArray, k: RGB, whole: boolean) {
   const { width: w, height: h, data } = d;
@@ -414,6 +519,14 @@ function despill(d: ImageData, a: Uint8ClampedArray, k: RGB, whole: boolean) {
       // Only in the darker tones, where the bounce shows: a pale blue shirt that read as grey
       // in a warmly lit photo is still pale blue.
       const l = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      // Whites and pale greys pick up a faint tint of the backdrop too (white stripes turned
+      // pink on magenta): near-neutral light pixels lose the backdrop's direction of colour.
+      const ch = Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]);
+      if (l > 150 && ch < 22) {
+        const s = (data[i] - l) * cn[0] + (data[i + 1] - l) * cn[1] + (data[i + 2] - l) * cn[2];
+        if (s > 0) for (let c = 0; c < 3; c++) data[i + c] -= cn[c] * s;
+        continue;
+      }
       const e = (hi - lo - 2) * Math.min(1, Math.max(0, (170 - l) / 80));
       if (e <= 0) continue;
       for (let c = 0; c < 3; c++) data[i + c] -= e * mix[c];
@@ -446,9 +559,12 @@ export function cutOut(src: HTMLCanvasElement, noSpill = false): Cut | null {
   const chroma = isSaturated(k);
   const flood = chroma ? null : floodAlpha(d, k);
   const a = flood ? flood.alpha : chromaAlpha(d, k);
+  const inside = flood ? 0 : onlyBackdrop(a, d, k);
   keepMainShapes(a, w, h);
   refineEdge(a, w, h);
-  if (chroma) despill(d, a, k, noSpill);
+  // Reflected backdrop light is taken out of the whole piece only when the piece really has none
+  // of that colour: neither the photo (judged white-balanced, see `rankBackdrops`) nor the remake.
+  if (chroma) despill(d, a, k, noSpill && hueShare(d, a, k) < 0.05);
 
   let solid = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
   for (let y = 0; y < h; y++) {
@@ -474,7 +590,7 @@ export function cutOut(src: HTMLCanvasElement, noSpill = false): Cut | null {
   x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
   const out = makeCanvas(x1 - x0 + 1, y1 - y0 + 1);
   out.getContext('2d')!.drawImage(src, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
-  return { canvas: out, cover, doubt: flood?.doubt ?? 0 };
+  return { canvas: out, cover, doubt: flood?.doubt ?? 0, inside };
 }
 
 /** True when a picture already carries real transparency (a ready-made cut-out). */
@@ -534,7 +650,17 @@ export function rankBackdrops(photo: HTMLCanvasElement): (Backdrop & { share: nu
   const s = makeCanvas(96, 96);
   const ctx = s.getContext('2d', { willReadFrequently: true })!;
   ctx.drawImage(photo, 0, 0, 96, 96);
-  const d = ctx.getImageData(0, 0, 96, 96).data;
+  const img = ctx.getImageData(0, 0, 96, 96);
+  const d = img.data;
+  // Judge colours as they are, not as the room light makes them: under a warm lamp a pale blue
+  // shirt reads grey or even pink, so the cobalt backdrop was chosen for blue shirts, and the key
+  // took the blue out. A light wall or sheet around the piece shows the light's colour.
+  const wall = border(img).color;
+  const wm = (wall[0] + wall[1] + wall[2]) / 3;
+  if (wm > 110 && Math.max(...wall) - Math.min(...wall) < 90) {
+    const g = wall.map((v) => Math.min(1.6, Math.max(0.6, wm / Math.max(1, v))));
+    for (let i = 0; i < d.length; i += 4) for (let c = 0; c < 3; c++) d[i + c] = d[i + c] * g[c];
+  }
   const mass = BACKDROPS.map(() => 0);
   const seen = BACKDROPS.map(() => 0);
   let total = 0;
@@ -557,8 +683,9 @@ export function rankBackdrops(photo: HTMLCanvasElement): (Backdrop & { share: nu
     }
   }
   return BACKDROPS.map((b, i) => ({ b, m: mass[i] / total, i }))
-    // 1.5% steps: ignore tiny differences so the preferred order wins ties.
-    .sort((p, q) => Math.round(p.m / 0.015) - Math.round(q.m / 0.015) || p.i - q.i)
+    // 4% steps: a touch of a colour (a blue label, a cool shadow) does not move the backdrop; the
+    // key only takes backdrop it can reach (see `onlyBackdrop`), so a little of it on the piece is safe.
+    .sort((p, q) => Math.round(p.m / 0.04) - Math.round(q.m / 0.04) || p.i - q.i)
     // share: how much of the photo has even a tinge of this colour (see `cutOut`'s noSpill)
     .map((x) => ({ ...x.b, share: seen[x.i] / total }));
 }
@@ -586,4 +713,44 @@ export function palette(c: HTMLCanvasElement): string[] {
     if (picked.every((p) => Math.hypot(p[0] - col[0], p[1] - col[1], p[2] - col[2]) > 60)) picked.push(col);
   }
   return picked.map((p) => '#' + p.map((v) => Math.round(v).toString(16).padStart(2, '0')).join(''));
+}
+
+/**
+ * How far the remake's colour has drifted from the photo's, as a hue angle in degrees (0 when
+ * either is too grey for its hue to mean anything). The photo is judged white-balanced by the
+ * wall or sheet around it, and only its middle, where the piece hangs, counts.
+ */
+export function drift(photo: HTMLCanvasElement, cut: HTMLCanvasElement): number {
+  const mean = (c: HTMLCanvasElement, middle: boolean): RGB | null => {
+    const N = 64;
+    const s = makeCanvas(N, N);
+    const ctx = s.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(c, 0, 0, N, N);
+    const img = ctx.getImageData(0, 0, N, N);
+    const d = img.data;
+    let g = [1, 1, 1];
+    if (middle) {
+      const wall = border(img).color;
+      const wm = (wall[0] + wall[1] + wall[2]) / 3;
+      if (wm > 110 && Math.max(...wall) - Math.min(...wall) < 90) g = wall.map((v) => Math.min(1.6, Math.max(0.6, wm / Math.max(1, v))));
+    }
+    const m = [0, 0, 0];
+    let n = 0;
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        if (middle && (x < N * 0.35 || x > N * 0.65 || y < N * 0.35 || y > N * 0.65)) continue;
+        const i = (y * N + x) * 4;
+        if (d[i + 3] < 250) continue;
+        for (let k = 0; k < 3; k++) m[k] += d[i + k] * g[k];
+        n++;
+      }
+    }
+    return n ? [m[0] / n, m[1] / n, m[2] / n] : null;
+  };
+  const a = mean(photo, true), b = mean(cut, false);
+  if (!a || !b) return 0;
+  const ca = Math.max(...a) - Math.min(...a), cb = Math.max(...b) - Math.min(...b);
+  if (ca < 18 || cb < 18) return 0;
+  const ha = hueOf(a[0], a[1], a[2]).h, hb = hueOf(b[0], b[1], b[2]).h;
+  return Math.abs(((ha - hb + 540) % 360) - 180);
 }

@@ -45,13 +45,12 @@ export function Icon({ name }: { name: keyof typeof PATHS }) {
   );
 }
 
-/** The mark: a coat hanger in one line. */
+/** The mark: a shirt collar that reads as a W. */
 export function Mark({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 112 66" fill="none" stroke="currentColor" strokeWidth="3.4"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M46 15a10 10 0 1110 10v9" />
-      <path d="M56 34l48 21a3 3 0 01-1.2 5.8H9.2A3 3 0 018 55z" />
+    <svg className={className} viewBox="96 120 320 260" fill="currentColor" aria-hidden="true">
+      <path d="M96 120h130l30 150-90 110z" />
+      <path d="M416 120H286l-30 150 90 110z" />
     </svg>
   );
 }

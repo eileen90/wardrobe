@@ -24,15 +24,27 @@ export function makeCanvas(w: number, h: number) {
   return c;
 }
 
-/** Draw `src` scaled so its longest side is at most `max`. */
+/**
+ * Draw `src` scaled so its longest side is at most `max`. Big reductions go in halves, each
+ * step averaging the pixels it drops: one large jump samples only a few of them, and fine
+ * stripes come out as coarse false ones (moiré).
+ */
 export function scaled(src: CanvasImageSource & { width: number; height: number }, max: number) {
   const w = 'naturalWidth' in src ? (src as HTMLImageElement).naturalWidth : src.width;
   const h = 'naturalHeight' in src ? (src as HTMLImageElement).naturalHeight : src.height;
   const k = Math.min(1, max / Math.max(w, h));
+  let from: CanvasImageSource = src, fw = w, fh = h;
+  while (fw / 2 >= w * k && fh / 2 >= 1) {
+    const half = makeCanvas(fw / 2, fh / 2);
+    const hx = half.getContext('2d')!;
+    hx.imageSmoothingQuality = 'high';
+    hx.drawImage(from, 0, 0, half.width, half.height);
+    from = half; fw = half.width; fh = half.height;
+  }
   const c = makeCanvas(w * k, h * k);
   const ctx = c.getContext('2d')!;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(src, 0, 0, c.width, c.height);
+  ctx.drawImage(from, 0, 0, c.width, c.height);
   return c;
 }
 
