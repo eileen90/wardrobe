@@ -1,23 +1,27 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { editMany, redoMany, removeMany } from '../lib/actions';
 import { isKey } from '../lib/shortcuts';
 import { useStore } from '../lib/store';
 import { CATEGORIES } from '../lib/types';
-import { Icon } from '../ui';
+import { Icon, MoreToggle, NoteField, peek, peekOnly, Pill, useAlt, useArmed, usePeeking } from '../ui';
+import { getItem } from '../lib/store';
+import { savePictures } from '../lib/pictures';
 import type { PieceAction } from '../lib/boards';
 
 /** The bar that takes the dock's place while pieces are selected, on every screen. */
-function SelectionBar({ n, total, onAll, onClear, panel, children }: {
+function SelectionBar({ n, total, onAll, onClear, panel, children, bar, more }: {
   n: number; total: number; onAll: () => void; onClear: () => void; panel?: ReactNode; children: ReactNode;
+  bar?: React.RefObject<HTMLDivElement | null>; more?: ReactNode;
 }) {
   return (
-    <div className="selbar glass" role="toolbar" aria-label="Selected pieces">
+    <div className="selbar glass" role="toolbar" aria-label="Selected pieces" ref={bar}>
       {panel}
       <div className="selbar__head">
         <b className="num">{n} selected</b>
         <span>
           {n < total && <button className="small link" onClick={onAll}>select all</button>}
           <button className="small link" onClick={onClear}>clear</button>
+          {more}
         </span>
       </div>
       <div className="selbar__acts">{children}</div>
@@ -31,7 +35,20 @@ export function ClosetSelection({ ids, total, onAll, onClear }: {
 }) {
   const hasKey = useStore((s) => !!s.settings.key);
   const [moving, setMoving] = useState(false);
+  const bar = useRef<HTMLDivElement>(null);
+  const [arming, setArming] = useArmed(bar);
+  const [note, setNote] = useState('');
+  useEffect(() => { if (!arming) setNote(''); }, [arming]);
   const n = ids.length;
+  // Option (⋯ on touch): the alternates. The originals stay up until toggled off or the selection ends.
+  const held = useAlt();
+  const [more, setMore] = useState(false);
+  const alt = held || more;
+  const peeking = usePeeking();
+  const originals = ids.length > 0 && ids.every((id) => peeking.has(id));
+  const key = ids.join();
+  useEffect(() => peekOnly(ids), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => peekOnly([]), []);
 
   useEffect(() => {
     if (!moving) return;
@@ -42,13 +59,19 @@ export function ClosetSelection({ ids, total, onAll, onClear }: {
   }, [moving]);
 
   const done = () => { setMoving(false); onClear(); };
-  // Pieces sorted by hand keep their kind; the rest are looked at again.
+  // Pieces sorted by hand keep their kind; the rest are looked at again. One note for all of them.
   const redo = () => {
-    void redoMany(ids, {}, { recheckKind: true });
+    if (!arming) { setMoving(false); return setArming(true); }
+    void redoMany(ids, note.trim() ? { note: note.trim() } : {}, { recheckKind: true });
+    setArming(false);
     done();
   };
 
-  const panel = moving && (
+  const panel = arming ? (
+    <div className="selbar__note">
+      <NoteField value={note} onChange={setNote} onGo={redo} onCancel={() => setArming(false)} />
+    </div>
+  ) : moving && (
     <div className="chips selbar__panel" role="group" aria-label="Move to">
       {CATEGORIES.map((c) => (
         <button key={c.id} className="pill"
@@ -60,14 +83,19 @@ export function ClosetSelection({ ids, total, onAll, onClear }: {
     </div>
   );
   return (
-    <SelectionBar n={n} total={total} onAll={onAll} onClear={onClear} panel={panel}>
-      {hasKey && <button className="pill" onClick={redo}><Icon name="turn" />redo</button>}
-      <button className={'pill' + (moving ? ' is-on' : '')} aria-expanded={moving} onClick={() => setMoving(!moving)}>
+    <SelectionBar n={n} total={total} onAll={onAll} onClear={onClear} panel={panel} bar={bar}
+      more={<MoreToggle on={more} onChange={setMore} />}>
+      {(alt || originals) && !arming ? (
+        <Pill icon="photos" label={originals ? 'cut-outs' : 'originals'} pressed={originals} className="is-alt"
+          run={() => peek(ids, !originals)} />
+      ) : hasKey && <button className={'pill' + (arming ? ' is-on' : '')} onClick={redo}><Icon name="turn" />{arming ? 'redo ' + n : 'redo'}</button>}
+      <button className={'pill' + (moving ? ' is-on' : '')} aria-expanded={moving} onClick={() => { setArming(false); setMoving(!moving); }}>
         move to
       </button>
       <button className="pill" onClick={() => { editMany(ids, { status: 'owned' }, { label: `${n} marked as mine` }); done(); }}>mine</button>
       <button className="pill" onClick={() => { editMany(ids, { status: 'wish' }, { label: `${n} on the wishlist` }); done(); }}>wishlist</button>
-      <button className="pill" onClick={() => { removeMany(ids); done(); }}><Icon name="bin" />remove</button>
+      <Pill icon="bin" label="remove" run={() => { removeMany(ids); done(); }} showAlt={alt}
+        alt={{ label: 'save pictures', icon: 'share', run: () => void savePictures(ids.flatMap((id) => getItem(id) ?? [])) }} />
     </SelectionBar>
   );
 }

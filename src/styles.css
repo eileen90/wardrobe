@@ -810,7 +810,8 @@ img {
   text-align: center;
 }
 .empty svg.mark {
-  width: 132px;
+  width: 88px;
+  height: auto;
   color: var(--blue);
 }
 .empty p {
@@ -2161,4 +2162,89 @@ kbd.pill.is-key {
 /* Over the strip of pieces, never on it. */
 .app:has(.looks:not([hidden]) .pick):not(:has(.focus)) .toast {
   bottom: calc(var(--bottom) + 252px);
+/* ===================== polish 2: notes, alternates, renditions (appended) ===================== */
+
+/* Redo, armed: the note field opens beside the button, which now just says "redo". */
+.redo {
+  display: flex;
+  min-width: 0;
+}
+.redo > .pill {
+  flex: 1 1 auto;
+}
+.redo.is-armed {
+  grid-column: 1 / -1;
+  gap: 8px;
+  animation: rise 0.35s var(--ease) backwards;
+}
+.redo.is-armed > .pill {
+  flex: none;
+}
+.notefield {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.notefield::placeholder {
+  color: var(--hint);
+}
+.selbar__note {
+  display: flex;
+}
+@media (pointer: coarse) {
+  .notefield {
+    font-size: 16px;
+  }
+}
+
+/* Alternates: the ⋯ that shows them on touch screens, and the original photo in place of the cut-out. */
+.slip__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slip__top .slip__name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.iconbtn.more svg {
+  width: 18px;
+  height: 18px;
+}
+.iconbtn.more.is-on {
+  background: var(--ink);
+  color: #fff;
+}
+.selbar__head .iconbtn.more {
+  margin: -6px -6px -6px 0;
+}
+.print.is-original {
+  background: #fff;
+}
+.print.is-original img {
+  object-fit: contain;
+  filter: none;
+}
+.focus__fig .print.is-original img {
+  max-height: min(72svh, 100%);
+}
+/* Stands in for a picture until it is known how big it is drawn. */
+.garment__probe {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* Notes: the label sits level with the first line of text, not the middle of the field. */
+.line:has(textarea) {
+  align-items: start;
+}
+.line:has(textarea) > span:first-child {
+  padding-top: 7px;
 }

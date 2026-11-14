@@ -169,7 +169,7 @@ export async function critique(key: string, photo: string, attempt: string, note
             'product photo on a flat backdrop; the backdrop colour does not matter. List what picture 2 gets wrong compared ' +
             'with picture 1: parts cut off or missing (sleeves, hem, straps, toes), wrong colours or shades, prints, patterns, ' +
             'logos or text that are wrong, blurred or missing, wrong shape, length or proportions, extra things added. ' +
-            (note ? `The owner says: "${note.slice(0, 300)}". ` : '') +
+            (note ? `The owner, who knows this piece, says what is wrong: "${note.slice(0, 300)}". Your first fix must address that. ` : '') +
             'Reply with at most four short imperative fixes for an image model, one per line, each naming the exact detail ' +
             '(for example "Show both sleeves in full" or "Make the blue a deep navy, as in the photo"). Reply "none" if it is faithful.',
         },

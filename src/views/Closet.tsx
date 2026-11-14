@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { arrange, removeMany } from '../lib/actions';
+import * as db from '../lib/db';
 import { between } from '../lib/canvas';
 import {
   clusterOf, dropTarget, groupName, groupOf, GROUPS, layFloor, orderOnFloor, rank, reflow, unsorted,
@@ -8,7 +9,7 @@ import {
 import { LABELS, type PieceAction } from '../lib/boards';
 import { realSize } from '../lib/kind';
 import { covered, held, hint, isKey, isPointer, useBindings } from '../lib/shortcuts';
-import { saveSettings, updateItem, useStore } from '../lib/store';
+import { getState, saveSettings, updateItem, useStore } from '../lib/store';
 import { CATEGORIES, catPlural, type Category, type Item } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, useViewport } from '../ui';
 import { Canvas, type CanvasApi, type CanvasPiece } from './Canvas';
@@ -17,6 +18,8 @@ import { ClosetSelection } from './Selection';
 interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
 
 const clampS = (s: number) => Math.min(4, Math.max(0.3, s));
+/** Bumped when the floor is laid out differently; older places are laid out again once. */
+const FLOOR_LAYOUT = 2;
 
 /* ---------- lined up: one rail per kind ---------- */
 
@@ -311,6 +314,19 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
   const [drop, setDrop] = useState<{ cluster: string; ids: string[] } | null>(null);
   const api = useRef<CanvasApi | null>(null);
   useBindings();
+
+  // Places from the looser floor of earlier versions are laid out once more, closer together.
+  // Which pieces were put down by hand was never kept, so all of them are; one undo puts them back.
+  const ready = useStore((s) => s.ready);
+  useEffect(() => {
+    if (!ready) return;
+    void db.getKV<number>('floor:layout').then((v) => {
+      if ((v ?? 1) >= FLOOR_LAYOUT) return;
+      void db.setKV('floor:layout', FLOOR_LAYOUT);
+      const placed = getState().items.filter((i) => i.pos);
+      if (placed.length) arrange(placed.map((i) => [i.id, { pos: { ...i.pos!, c: '' } }]), 'Closet laid out closer');
+    });
+  }, [ready]);
 
   /** One arrangement for both views. */
   const floor = useMemo(() => layFloor(items), [items]);

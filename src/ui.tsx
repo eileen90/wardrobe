@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { LEVELS } from './lib/mips';
 import { isKey } from './lib/shortcuts';
 import { usePic } from './lib/store';
 import type { Item } from './lib/types';
@@ -45,21 +46,91 @@ export function Icon({ name }: { name: keyof typeof PATHS }) {
   );
 }
 
-/** The mark: a coat hanger in one line. */
+/** The mark: a shirt collar that reads as a W. */
 export function Mark({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 112 66" fill="none" stroke="currentColor" strokeWidth="3.4"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M46 15a10 10 0 1110 10v9" />
-      <path d="M56 34l48 21a3 3 0 01-1.2 5.8H9.2A3 3 0 018 55z" />
+    <svg className={className} viewBox="96 120 320 260" fill="currentColor" aria-hidden="true">
+      <path d="M96 120h130l30 150-90 110z" />
+      <path d="M416 120H286l-30 150 90 110z" />
     </svg>
   );
 }
 
 /* ---------- a piece, however far along it is ---------- */
 
-export function Garment({ item, size = 'thumb', small }: { item: Item; size?: 'thumb' | 'full'; small?: boolean }) {
-  const url = usePic(item, size);
+/* ---------- how big a picture is drawn ---------- */
+
+/** Larger than any copy: draw from the cut-out itself. */
+const FULL = 1e4;
+/** Sizes as copies are kept: the smallest copy at least `px` across. */
+const levelFor = (px: number) => LEVELS.find((l) => l >= px * 0.95) ?? FULL;
+
+/**
+ * The floor and the boards zoom by changing one transform on their world, which re-renders
+ * nothing; pictures inside watch that transform and look at their size once it settles.
+ */
+const worlds = new WeakMap<Element, Set<() => void>>();
+function onZoom(el: Element, f: () => void) {
+  const world = el.closest('.canvas__world');
+  if (!world) return () => {};
+  let subs = worlds.get(world);
+  if (!subs) {
+    const set = new Set<() => void>();
+    subs = set;
+    worlds.set(world, set);
+    let t: ReturnType<typeof setTimeout> | undefined, t2: ReturnType<typeof setTimeout> | undefined;
+    new MutationObserver(() => {
+      clearTimeout(t); clearTimeout(t2);
+      t = setTimeout(() => set.forEach((g) => g()), 180);
+      // An eased move to fit takes about half a second.
+      t2 = setTimeout(() => set.forEach((g) => g()), 620);
+    }).observe(world, { attributes: true, attributeFilter: ['style', 'class'] });
+  }
+  subs.add(f);
+  return () => void subs!.delete(f);
+}
+
+/** The copy size that suits how big `el` is on screen now, for a picture of `aspect` (w / h). */
+function measure(el: Element, aspect: number) {
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return 0;
+  const a = aspect > 0 ? aspect : 1;
+  // Fitted inside the box, as object-fit: contain draws it.
+  const h = Math.min(r.height, r.width / a);
+  return levelFor(Math.max(h, h * a) * (window.devicePixelRatio || 1));
+}
+
+export function Garment({ item, size = 'thumb', small, raw }: {
+  item: Item; size?: 'thumb' | 'full'; small?: boolean;
+  /** show the original photo instead of the cut-out */
+  raw?: boolean;
+}) {
+  const original = usePeeking().has(item.id) || !!raw;
+  // The picture is fetched at the size it is drawn; until that is known, a probe takes the
+  // picture's place to be measured.
+  const el = useRef<HTMLElement | null>(null);
+  const [level, setLevel] = useState(0);
+  const sized = item.state === 'ready' && !original;
+  const look = () => {
+    const l = el.current && measure(el.current, item.aspect);
+    // Not on screen (a hidden page): a fair guess, refined once it is measured.
+    setLevel((cur) => l || cur || (size === 'full' ? FULL : small ? 336 : 672));
+  };
+  useLayoutEffect(look);
+  // Pages and pieces arrive with a grow or slide; look again once that has settled.
+  useEffect(() => {
+    const t = setTimeout(look, 750);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+  useEffect(() => {
+    if (!sized || !el.current) return;
+    const off = onZoom(el.current, look);
+    window.addEventListener('resize', look);
+    return () => { off(); window.removeEventListener('resize', look); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sized, !!el.current]);
+  const url = usePic(sized && !level ? undefined : item, original ? 'raw' : size, sized ? level : 0);
   // A piece that comes back from the studio while you watch is wiped in from the top.
   const was = useRef(item.state);
   const [fresh, setFresh] = useState(false);
@@ -67,15 +138,15 @@ export function Garment({ item, size = 'thumb', small }: { item: Item; size?: 't
     if (item.state === 'ready' && was.current !== 'ready') setFresh(true);
     was.current = item.state;
   }, [item.state]);
-  if (item.state === 'ready') {
+  if (item.state === 'ready' && !original) {
     return url
-      ? <img className={'garment' + (small ? ' is-small' : '') + (fresh ? ' is-fresh' : '')} src={url} alt={item.name}
-          draggable={false} onAnimationEnd={() => setFresh(false)} />
-      : null;
+      ? <img ref={(e) => { el.current = e; }} className={'garment' + (small ? ' is-small' : '') + (fresh ? ' is-fresh' : '')}
+          src={url} alt={item.name} data-level={level} draggable={false} onAnimationEnd={() => setFresh(false)} />
+      : <span className="garment__probe" ref={(e) => { el.current = e; }} />;
   }
   const developing = item.state === 'working';
   return (
-    <div className={'print' + (developing ? ' is-developing' : '')}>
+    <div className={'print' + (developing ? ' is-developing' : '') + (original && item.state === 'ready' ? ' is-original' : '')}>
       {url && <img src={url} alt={item.name} draggable={false} />}
     </div>
   );
@@ -180,4 +251,110 @@ export function useViewport() {
     return () => window.removeEventListener('resize', f);
   }, []);
   return v;
+}
+
+/* ---------- alternates: what a button does with Option held ---------- */
+
+/**
+ * Held down, this key turns buttons into their alternates, as Option does in a Mac menu.
+ * TODO: register as 'alternate' (default 'alt') in shortcuts.ts and read it from there.
+ */
+const ALTERNATE_KEY = 'Alt';
+
+let altHeld = false;
+const altSubs = new Set<() => void>();
+function setAlt(on: boolean) {
+  if (altHeld === on) return;
+  altHeld = on;
+  altSubs.forEach((f) => f());
+}
+let altWatching = false;
+function watchAlt() {
+  if (altWatching) return;
+  altWatching = true;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ALTERNATE_KEY) { if (!e.repeat) setAlt(true); }
+    // Option with another key is a character or a shortcut, not a look at the alternates.
+    else if (altHeld) setAlt(false);
+  });
+  window.addEventListener('keyup', (e) => { if (e.key === ALTERNATE_KEY) { e.preventDefault(); setAlt(false); } });
+  // Let go outside the window, or the window lost focus while it was down.
+  window.addEventListener('pointermove', (e) => { if (!e.altKey && altHeld) setAlt(false); }, { passive: true });
+  window.addEventListener('blur', () => setAlt(false));
+  document.addEventListener('visibilitychange', () => setAlt(false));
+}
+/** True while the alternate key is held down. */
+export function useAlt() {
+  watchAlt();
+  return useSyncExternalStore((f) => (altSubs.add(f), () => void altSubs.delete(f)), () => altHeld);
+}
+
+/** Touch screens have no Option key: a ⋯ button shows the same alternates. */
+export const noAltKey = () => matchMedia('(pointer: coarse)').matches;
+export function MoreToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  if (!noAltKey()) return null;
+  return (
+    <button className={'iconbtn is-small more' + (on ? ' is-on' : '')} aria-label="More" aria-pressed={on}
+      onClick={() => onChange(!on)}><Icon name="more" /></button>
+  );
+}
+
+export interface Alternate { label: string; icon?: keyof typeof PATHS; run: () => void; pressed?: boolean }
+/** A pill that becomes its alternate while `alt` is on. */
+export function Pill({ icon, label, run, alt, showAlt, className = '', disabled, pressed }: {
+  icon?: keyof typeof PATHS; label: string; run: () => void; alt?: Alternate; showAlt?: boolean;
+  className?: string; disabled?: boolean; pressed?: boolean;
+}) {
+  const a = showAlt && alt ? alt : null;
+  const on = a ? a.pressed : pressed;
+  return (
+    <button className={'pill ' + className + (a ? ' is-alt' : '') + (on ? ' is-on' : '')} disabled={!a && disabled}
+      aria-pressed={on === undefined ? undefined : on} onClick={a ? a.run : run}>
+      {(a ? a.icon : icon) && <Icon name={(a ? a.icon : icon)!} />}{a ? a.label : label}
+    </button>
+  );
+}
+
+/* ---------- originals shown in place of cut-outs ---------- */
+
+let peeking = new Set<string>();
+const peekSubs = new Set<() => void>();
+/** Show these pieces' original photos wherever they are drawn (or stop). */
+export function peek(ids: string[], on: boolean) {
+  const next = new Set(peeking);
+  for (const id of ids) if (on) next.add(id); else next.delete(id);
+  peeking = next;
+  peekSubs.forEach((f) => f());
+}
+/** Stop showing originals, except for `keep`. */
+export const peekOnly = (keep: string[]) => peek([...peeking].filter((id) => !keep.includes(id)), false);
+export const usePeeking = () => useSyncExternalStore((f) => (peekSubs.add(f), () => void peekSubs.delete(f)), () => peeking);
+
+/* ---------- a button that asks for a note on its second press ---------- */
+
+/** True while armed; any press outside `ref` (or Escape in the field) lets go. */
+export function useArmed(ref: React.RefObject<HTMLElement | null>) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const out = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setArmed(false); };
+    document.addEventListener('pointerdown', out, true);
+    return () => document.removeEventListener('pointerdown', out, true);
+  }, [armed, ref]);
+  return [armed, setArmed] as const;
+}
+
+/** The optional note a second press sends along. Enter sends it; Escape lets go. */
+export function NoteField({ value, onChange, onGo, onCancel, placeholder = "what's wrong? (optional)" }: {
+  value: string; onChange: (v: string) => void; onGo: () => void; onCancel: () => void; placeholder?: string;
+}) {
+  return (
+    <input className="notefield" value={value} placeholder={placeholder} aria-label="What's wrong" autoFocus
+      enterKeyHint="go" autoCorrect="off" maxLength={300}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); onGo(); }
+        else if (isKey(e, 'close', { inField: true })) { e.preventDefault(); e.stopPropagation(); onCancel(); }
+      }} />
+  );
 }
