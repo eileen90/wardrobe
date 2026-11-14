@@ -2162,6 +2162,7 @@ kbd.pill.is-key {
 /* Over the strip of pieces, never on it. */
 .app:has(.looks:not([hidden]) .pick):not(:has(.focus)) .toast {
   bottom: calc(var(--bottom) + 252px);
+}
 /* ===================== polish 2: notes, alternates, renditions (appended) ===================== */
 
 /* Redo, armed: the note field opens beside the button, which now just says "redo". */
