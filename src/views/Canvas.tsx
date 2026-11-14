@@ -700,7 +700,7 @@ export function Canvas(props: {
   return (
     <div
       ref={root}
-      className={'canvas' + (sel.size ? ' is-selecting' : '') + (carrying ? ' is-carrying' : '') + (f ? ' has-frame' : '')}
+      className={'canvas' + (sel.size ? ' is-selecting' : '') + (carrying ? ' is-carrying' : '') + (f ? ' has-frame' : '') + (ids.length > 1 ? ' has-group' : '')}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest('[data-pid], [data-hud], [data-handle]')) fit(true); }}
       onContextMenu={(e) => e.preventDefault()}
