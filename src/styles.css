@@ -2249,3 +2249,40 @@ kbd.pill.is-key {
 .line:has(textarea) > span:first-child {
   padding-top: 7px;
 }
+
+/* ===================== looks 3: shoe slot, strip modes, marquee, shortcut columns (appended) ===================== */
+
+/* Where shoes go under the hem while none are on. */
+.canvas__world .slot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: calc(1.5px * var(--zi, 1)) dashed var(--faint);
+  border-radius: 14px;
+  background: none;
+  color: var(--hint);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.canvas__world .slot svg {
+  width: 22px;
+  height: 22px;
+}
+.canvas__world .slot:hover {
+  border-color: var(--muted);
+  color: var(--ink);
+}
+.pick__strip .pick__none.pill {
+  align-self: center;
+  flex: none;
+  margin: 0 10px;
+  padding: 0 12px 0 10px;
+  gap: 4px;
+}
+.pick__strip {
+  min-height: 102px;
+  align-items: center;
+}

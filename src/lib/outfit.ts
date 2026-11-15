@@ -56,9 +56,34 @@ export function layout(pieces: Placed[], find: Find): Placed[] {
     const r = railOf(it);
     if (!lead.has(r)) lead.set(r, p);
   }
-  const lay = flatLay([...lead].map(([rail, p]) => ({ rail, item: find(p.itemId)! })));
-  const at = new Map(lay.map((l) => [lead.get(l.rail)!.id, l]));
+  const lay = flatLay(withSlot([...lead].map(([rail, p]) => ({ rail, item: find(p.itemId)! })), pieces, find));
+  const at = new Map(lay.flatMap((l) => { const p = lead.get(l.rail); return p ? [[p.id, l] as const] : []; }));
   return pieces.map((p) => { const l = at.get(p.id); return l ? { ...p, x: l.x, y: l.y, w: l.w, rot: 0 } : p; });
+}
+
+/** A pair of shoes of no particular kind, for keeping their place under the hem. */
+const SHOES = { id: '', name: '', category: 'shoes', aspect: 2.2, state: 'ready' } as Item;
+/**
+ * Shoes always have their place under the hem: with none on, the flat lay leaves room for a
+ * pair, so putting one on moves nothing else.
+ */
+function withSlot(picks: { rail: string; item: Item }[], pieces: Placed[], find: Find) {
+  const body = picks.some((p) => p.rail === 'top' || p.rail === 'bottom');
+  const shod = pieces.some((p) => { const it = find(p.itemId); return it && railOf(it) === 'shoes'; });
+  return body && !shod ? [...picks, { rail: 'shoes', item: SHOES }] : picks;
+}
+
+/** Where shoes would lie, in shares of the board, while the outfit has none on. */
+export function shoeSlot(pieces: Placed[], find: Find): B | null {
+  const lead = new Map<string, Item>();
+  for (const p of pieces) {
+    const it = find(p.itemId);
+    if (it && !p.byHand && !lead.has(railOf(it))) lead.set(railOf(it), it);
+  }
+  const picks = withSlot([...lead].map(([rail, item]) => ({ rail, item })), pieces, find);
+  if (!picks.some((p) => p.item === SHOES)) return null;
+  const l = flatLay(picks).find((x) => x.rail === 'shoes');
+  return l ? { x: l.x, y: l.y, w: l.w, h: hOf(l.w, SHOES) } : null;
 }
 
 /** A box in shares of the board, for finding room. */

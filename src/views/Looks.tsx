@@ -13,7 +13,7 @@ import {
 import { bounds, type Box, type View } from '../lib/canvas';
 import { shareLook } from '../lib/exportBoard';
 import { trueSize } from '../lib/size';
-import { asLook, KEY_ORDER, nextOf, RAIL, RAILS, railOf, swap, type RailId } from '../lib/outfit';
+import { asLook, KEY_ORDER, nextOf, RAIL, RAILS, railOf, shoeSlot, swap, type RailId } from '../lib/outfit';
 import { hint, isDone, isKey, useBindings } from '../lib/shortcuts';
 import { getState, saveLook, useStore } from '../lib/store';
 import { BOARD_RATIO, PAPERS, uid, type Item, type Look, type Placed } from '../lib/types';
@@ -339,7 +339,11 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   };
 
   /* ----- putting pieces on ----- */
-  const strips = RAILS.filter((r) => fit.pools[r.id].length || (look && poolsOf(items, true)[r.id].length));
+  /** Kinds there is something of; shoes always, so they have a place before there are any. */
+  const strips = RAILS.filter((r) => r.id === 'shoes' || fit.pools[r.id].length || (look && poolsOf(items, true)[r.id].length));
+  /** Put on the next piece of a kind nobody is wearing; with none to put on, show the kind. */
+  const addKind = (r: RailId) => { const it = fit.unworn(r); if (it) putOn(it); else setStrip(r); };
+  const slot = useMemo(() => (look ? null : shoeSlot(fit.pieces, fit.find)), [look, fit.pieces, fit.find]);
   const stripPool = useMemo(() => {
     const pools = look ? poolsOf(items, true) : fit.pools;
     return strip === 'all' ? RAILS.flatMap((r) => pools[r.id]) : strip ? pools[strip as RailId] ?? [] : [];
@@ -568,8 +572,12 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   }
 
   const top = 52 + 10 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--top')) || 0);
-  const under = look && (
+  const under = look ? (
     <div className="area is-in" style={{ transform: `translate(${look.at?.x ?? 0}px, ${look.at?.y ?? 0}px)`, width: BW * space.s, height: BH * space.s, background: look.paper }} />
+  ) : slot && (
+    <button data-hud className="slot" aria-label="Add shoes" title="Shoes" onClick={() => addKind('shoes')} style={{
+      width: slot.w * BW, height: slot.h * BH, transform: `translate(${(slot.x - slot.w / 2) * BW}px, ${(slot.y - slot.h / 2) * BH}px)`,
+    }}><Icon name="plus" /></button>
   );
 
   return (
@@ -625,8 +633,8 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
         <div className="mix__layers">
           <button className="pill is-small" aria-pressed={fit.work.wish} onClick={fit.wish}>wishlist</button>
           {fit.work.kept.length > 0 && <button className="pill is-small" onClick={fit.letGo}><Icon name="unlock" />let go</button>}
-          {RAILS.filter((r) => fit.pools[r.id].length).map((r) => (
-            <button key={r.id} className="pill is-small is-add" disabled={!fit.unworn(r.id)} onClick={() => { const it = fit.unworn(r.id); if (it) putOn(it); }} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>
+          {RAILS.filter((r) => r.id === 'shoes' || fit.pools[r.id].length).map((r) => (
+            <button key={r.id} className="pill is-small is-add" disabled={!!fit.pools[r.id].length && !fit.unworn(r.id)} onClick={() => addKind(r.id)} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>
           ))}
         </div>
       )}
@@ -644,6 +652,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
           on={onBoard}
           onPick={pick}
           onDrop={dropped}
+          onAdd={onAdd}
           ghostWidth={ghostWidth}
           onClose={() => setStrip(null)}
         />

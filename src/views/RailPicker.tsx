@@ -7,7 +7,7 @@ import { Garment, Icon } from '../ui';
  * The pieces to put on, in a glass strip over the dock: one kind or all of them. A tap puts a
  * piece on (or takes it off again); dragged up out of the strip, it lands where it is let go.
  */
-export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, ghostWidth, onClose }: {
+export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, onAdd, ghostWidth, onClose }: {
   kinds: { id: string; title: string }[];
   /** the kind shown, or 'all' */
   kind: string;
@@ -18,6 +18,8 @@ export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, ghos
   onPick: (item: Item) => void;
   /** a piece carried out of the strip was let go here (client coordinates) */
   onDrop: (item: Item, x: number, y: number) => void;
+  /** add pieces to the closet, offered when a kind has none */
+  onAdd?: () => void;
   /** how wide a piece would be on the board, on screen */
   ghostWidth: (item: Item) => number;
   onClose: () => void;
@@ -81,7 +83,9 @@ export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, ghos
             {it.status === 'wish' && <span className="tag">wishlist</span>}
           </button>
         ))}
-        {!pool.length && <span className="pick__none small muted">Nothing here yet.</span>}
+        {!pool.length && (onAdd
+          ? <button className="pill is-small is-add pick__none" onClick={onAdd}><Icon name="plus" />add</button>
+          : <span className="pick__none small muted">Nothing here yet.</span>)}
       </div>
       {ghost && (() => {
         const w = ghostWidth(ghost.item), h = w / (ghost.item.aspect || 1);
