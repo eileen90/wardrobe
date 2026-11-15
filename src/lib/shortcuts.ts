@@ -12,7 +12,7 @@ import { getState, saveSettings, useStore } from './store';
 
 export type ShortcutId =
   | 'undo' | 'shortcuts' | 'close' | 'remove'
-  | 'select' | 'selectRange' | 'selectAll' | 'resize' | 'zoom' | 'fit'
+  | 'select' | 'marquee' | 'selectRange' | 'selectAll' | 'resize' | 'zoom' | 'fit'
   | 'open' | 'nudge' | 'shove' | 'grow' | 'shrink' | 'turn' | 'turnBack' | 'forward' | 'backward' | 'flip' | 'duplicate'
   | 'railUp' | 'railDown' | 'keep' | 'pickAll' | 'shuffle' | 'save' | 'prev' | 'next';
 
@@ -29,6 +29,8 @@ interface Shortcut {
   label: string;
   where: string;
   keys: string;
+  /** a second default that works too, until the shortcut is rebound */
+  also?: string;
   on: Screen[];
   /** Keys for selected pieces sit over the page's own keys (arrows nudge while pieces are selected). */
   selected?: boolean;
@@ -40,11 +42,12 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'close', label: 'Close or clear', where: 'Everywhere', keys: 'Escape', on: ALL },
   { id: 'shortcuts', label: 'Shortcuts', where: 'Everywhere', keys: 'F12', on: ALL },
 
-  { id: 'select', label: 'Add to the selection', where: 'Closet and looks', keys: 'mod+click', on: CANVAS },
+  { id: 'select', label: 'Add to or take from the selection', where: 'Closet and looks', keys: 'alt+click', also: 'mod+click', on: CANVAS },
+  { id: 'marquee', label: 'Select by drawing round', where: 'Closet and looks', keys: 'alt+drag', on: CANVAS },
   { id: 'selectRange', label: 'Select a range', where: 'Closet and looks', keys: 'shift+click', on: CANVAS },
   { id: 'selectAll', label: 'Select all', where: 'Closet and looks', keys: 'mod+a', on: CANVAS },
   { id: 'open', label: 'Open the piece (or enter a look)', where: 'Closet and looks', keys: 'dblclick', on: CANVAS },
-  { id: 'resize', label: 'Resize', where: 'Closet and looks', keys: 'alt+drag', on: CANVAS },
+  { id: 'resize', label: 'Resize (drag on a piece)', where: 'Closet and looks', keys: 'alt+drag', on: CANVAS },
   { id: 'zoom', label: 'Zoom', where: 'Closet and looks', keys: 'mod+wheel', on: CANVAS },
   { id: 'fit', label: 'Fit (again: everything)', where: 'Closet and looks', keys: '0', on: CANVAS },
   { id: 'nudge', label: 'Nudge', where: 'Closet and looks', keys: 'arrows', on: ['closet'], selected: true },
@@ -76,6 +79,11 @@ export function bindingOf(id: ShortcutId): string {
   return getState().settings.shortcuts?.[id] ?? SHORTCUT.get(id)!.keys;
 }
 export const defaultOf = (id: ShortcutId) => SHORTCUT.get(id)!.keys;
+/** Every binding in force: the owner's, or the defaults. */
+const bindingsOf = (id: ShortcutId): string[] => {
+  const own = getState().settings.shortcuts?.[id], s = SHORTCUT.get(id)!;
+  return own ? [own] : s.also ? [s.keys, s.also] : [s.keys];
+};
 
 /* ---------- reading bindings and events ---------- */
 
@@ -155,8 +163,10 @@ export const isDone = (e: React.KeyboardEvent) => e.key === 'Enter' && !e.native
 /** Is this click, drag or wheel the shortcut's gesture (judged by the modifiers held)? */
 export function isPointer(e: { metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }, id: ShortcutId): boolean {
   if (recording) return false;
-  const b = parse(bindingOf(id));
-  return gesture(b) && modDown(e) === b.mod && e.altKey === b.alt && e.shiftKey === b.shift;
+  return bindingsOf(id).some((x) => {
+    const b = parse(x);
+    return gesture(b) && modDown(e) === b.mod && e.altKey === b.alt && e.shiftKey === b.shift;
+  });
 }
 
 /** Some modifier is held. */
@@ -180,8 +190,8 @@ export function describe(binding: string): string {
   if (gesture(b) || b.key === 'arrows') return [...mods, gesture(b) ? key.toLowerCase() : key].join(' ');
   return isApple ? mods.join('') + key : [...mods, key].join('+');
 }
-/** The binding of a shortcut as it reads, for tooltips. */
-export const hint = (id: ShortcutId) => describe(bindingOf(id));
+/** The binding of a shortcut as it reads, for tooltips (with a second default: both). */
+export const hint = (id: ShortcutId) => bindingsOf(id).map(describe).join(' or ');
 
 /** Record a key press as a binding string (for rebinding in Settings); null for a lone modifier. */
 export function bindingFrom(e: KeyboardEvent): string | null {

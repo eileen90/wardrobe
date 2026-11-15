@@ -89,7 +89,7 @@ supabase.com wakes it.
 | Where | Keys |
 | --- | --- |
 | Anywhere | paste a picture or a link to add it, ⌘Z undo, ⌫ remove (with undo), Esc close or clear, F12 all shortcuts |
-| Closet and looks | click select, double-click open (a look: go in), ⌘ click add to the selection, ⇧ click select a range, ⌘A select all, ⌥ drag resize, ⌘ scroll or pinch to zoom, 0 fit (again: everything) |
+| Closet and looks | click select, double-click open (a look: go in), ⌥ click (or ⌘ click) add to or take from the selection, ⌥ drag on the floor select everything it touches, ⌥ drag on a piece resize, ⇧ click select a range, ⌘A select all, ⌘ scroll or pinch to zoom, 0 fit (again: everything) |
 | On a phone | tap select, double-tap open, long press add to the selection, two fingers on the selection resize and turn it |
 | Pieces selected | arrows nudge (on the looks board ⇧ arrows), = − size, ] [ layer, F flip, R ⇧R turn, ⌘D copy (looks) |
 | Looks | ← → change the selected piece for the next of its kind (nothing selected: everything not kept), ↑ ↓ select the next piece, L keep, ↩ all of that kind (an area: go in), Space shuffle, S save, Esc step out of a look |

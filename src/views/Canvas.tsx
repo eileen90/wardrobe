@@ -6,8 +6,9 @@
  *   double-click/tap  open the piece (an area on the looks board: go into it)
  *   drag              move it at once, selected or not; it snaps to its neighbours' edges
  *   corner handle     bigger or smaller        round handle, two-finger twist   turn it
- *   select / range    add pieces to the selection (long press on a phone)
- *   resize gesture    drag up bigger, down smaller
+ *   select / range    add pieces to the selection, or take one out (long press on a phone)
+ *   marquee gesture   on the floor: draw round pieces to select every one it touches
+ *   resize gesture    on a piece: drag up bigger, down smaller (not moved: select)
  *   pinch, ⌘ wheel    zoom around the pointer   wheel, drag on the floor        pan
  *
  * and, with pieces selected, the keys from shortcuts.ts. The canvas only reports what was done;
@@ -70,7 +71,8 @@ const settleTurn = (rot0: number, deg: number, fine: boolean) => {
 type Gesture =
   | { kind: 'press'; pid: number; id: string; sx: number; sy: number; touch: boolean; picked: boolean; lift?: ReturnType<typeof setTimeout>; hold?: ReturnType<typeof setTimeout> }
   | { kind: 'drag'; pid: number; id: string; ids: string[]; sx: number; sy: number; dx: number; dy: number; touch: boolean; others: Rect[] }
-  | { kind: 'resize'; pid: number; ids: string[]; sy: number; k: number }
+  | { kind: 'resize'; pid: number; ids: string[]; sx: number; sy: number; k: number; moved: boolean; /** let go unmoved: a select */ tap?: string }
+  | { kind: 'marquee'; pid: number; sx: number; sy: number; moved: boolean; picked: string }
   | { kind: 'handle'; pid: number; ids: string[]; turn: boolean; cx: number; cy: number; d0: number; a0: number; t: Transform; rot0: number }
   | { kind: 'twist'; ids: string[]; d0: number; a0: number; t: Transform; turns: boolean }
   | { kind: 'pan'; pid: number; sx: number; sy: number; vx: number; vy: number; moved: boolean }
@@ -140,6 +142,7 @@ export function Canvas(props: {
   const world = useRef<HTMLDivElement>(null);
   const guideX = useRef<HTMLDivElement>(null);
   const guideY = useRef<HTMLDivElement>(null);
+  const band = useRef<HTMLDivElement>(null);
   const view = useRef<View>({ z: 1, x: 0, y: 0 });
   const size = useRef({ w: 0, h: 0 });
   const [, setTick] = useState(0);
@@ -439,13 +442,15 @@ export function Canvas(props: {
     if (pointers.current.size > 2) return;
     const id = t.closest<HTMLElement>('[data-pid]')?.dataset.pid;
     if (id) {
-      if (isPointer(e, 'select')) { g.current = null; multi.current = true; toggle(id); return; }
+      // The select and resize gestures can share their keys: a drag resizes, a click selects.
+      const sel = isPointer(e, 'select');
+      if (sel && !isPointer(e, 'resize')) { g.current = null; multi.current = true; toggle(id); return; }
       if (isPointer(e, 'selectRange')) { g.current = null; range(id); return; }
       if (isPointer(e, 'resize')) {
         const P = live.current;
         const ids = P.sel.has(id) && P.sel.size > 1 ? selIds() : [id];
-        g.current = { kind: 'resize', pid: e.pointerId, ids, sy: at.y, k: 1 };
-        setLifted(ids);
+        g.current = { kind: 'resize', pid: e.pointerId, ids, sx: at.x, sy: at.y, k: 1, moved: false, tap: sel ? id : undefined };
+        if (!sel) setLifted(ids);
         return;
       }
       const touch = e.pointerType !== 'mouse';
@@ -457,7 +462,24 @@ export function Canvas(props: {
       g.current = c;
       return;
     }
+    if (e.pointerType === 'mouse' && isPointer(e, 'marquee')) {
+      g.current = { kind: 'marquee', pid: e.pointerId, sx: at.x, sy: at.y, moved: false, picked: '' };
+      return;
+    }
     g.current = { kind: 'pan', pid: e.pointerId, sx: at.x, sy: at.y, vx: view.current.x, vy: view.current.y, moved: false };
+  };
+  /** Every piece the band from (sx, sy) to (x, y) on screen touches is selected. */
+  const marquee = (c: Extract<Gesture, { kind: 'marquee' }>, x: number, y: number) => {
+    const x0 = Math.min(c.sx, x), y0 = Math.min(c.sy, y), x1 = Math.max(c.sx, x), y1 = Math.max(c.sy, y);
+    const el = band.current;
+    if (el) el.style.cssText = `display:block;transform:translate3d(${x0}px,${y0}px,0);width:${x1 - x0}px;height:${y1 - y0}px`;
+    const a = toWorld(view.current, x0, y0), b = toWorld(view.current, x1, y1);
+    const ids = live.current.pieces.filter((p) => { const r = aabb(p.box); return r.x0 < b.x && r.x1 > a.x && r.y0 < b.y && r.y1 > a.y; }).map((p) => p.id);
+    const key = ids.join();
+    if (key === c.picked) return;
+    c.picked = key;
+    anchor.current = ids[ids.length - 1] ?? null;
+    live.current.onSel(new Set(ids));
   };
 
   const move = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -465,6 +487,7 @@ export function Canvas(props: {
     if (e.pointerType === 'mouse' && !pointers.current.size) {
       // Holding the resize keys over a piece shows that it can be resized.
       root.current?.classList.toggle('is-resizing-key', isPointer(e, 'resize'));
+      root.current?.classList.toggle('is-marquee-key', isPointer(e, 'marquee'));
       return;
     }
     if (!pointers.current.has(e.pointerId)) return;
@@ -518,9 +541,17 @@ export function Canvas(props: {
       return;
     }
     if (c.kind === 'resize') {
+      if (!c.moved && Math.hypot(at.x - c.sx, at.y - c.sy) < 4) return;
+      if (!c.moved) { c.moved = true; setLifted(c.ids); }
       // Up is bigger, down is smaller, around each piece's centre.
       c.k = Math.min(4, Math.max(0.25, Math.exp(-(at.y - c.sy) / 180)));
       draw(c.ids, (b) => ({ b, s: c.k }));
+      return;
+    }
+    if (c.kind === 'marquee') {
+      if (!c.moved && Math.hypot(at.x - c.sx, at.y - c.sy) < 4) return;
+      c.moved = true;
+      marquee(c, at.x, at.y);
       return;
     }
     if (c.kind === 'pan') {
@@ -578,10 +609,16 @@ export function Canvas(props: {
     if (c.kind === 'resize') {
       setLifted([]);
       restore(c.ids);
-      if (!cancelled && Math.abs(c.k - 1) > 0.01) { settle(c.ids); P.onResize(c.ids, c.k, false); }
+      if (cancelled) return;
+      if (!c.moved && c.tap) { multi.current = true; toggle(c.tap); return; }
+      if (Math.abs(c.k - 1) > 0.01) { settle(c.ids); P.onResize(c.ids, c.k, false); }
       return;
     }
-    if (c.kind === 'pan' && !c.moved && !cancelled) {
+    if (c.kind === 'marquee') {
+      if (band.current) band.current.style.display = 'none';
+      if (c.moved || cancelled) return;
+    }
+    if ((c.kind === 'pan' || c.kind === 'marquee') && !c.moved && !cancelled) {
       if (P.sel.size) P.onSel(new Set());
       const at = local(e);
       P.onEmpty?.(toWorld(view.current, at.x, at.y));
@@ -653,6 +690,7 @@ export function Canvas(props: {
       // Whatever lies on top (a sheet, a piece's page) has the keyboard.
       if (!P.active || e.defaultPrevented || covered('page')) return;
       root.current?.classList.toggle('is-resizing-key', isPointer(e, 'resize'));
+      root.current?.classList.toggle('is-marquee-key', isPointer(e, 'marquee'));
       const ids = selIds();
       P.onKey?.(e, ids);
       if (e.defaultPrevented) return;
@@ -679,7 +717,10 @@ export function Canvas(props: {
         if (isKey(e, a) && P.onAction) { e.preventDefault(); P.onAction(a, ids); return; }
       }
     };
-    const kup = (e: KeyboardEvent) => root.current?.classList.toggle('is-resizing-key', isPointer(e, 'resize'));
+    const kup = (e: KeyboardEvent) => {
+      root.current?.classList.toggle('is-resizing-key', isPointer(e, 'resize'));
+      root.current?.classList.toggle('is-marquee-key', isPointer(e, 'marquee'));
+    };
     window.addEventListener('keydown', k);
     window.addEventListener('keyup', kup);
     return () => { window.removeEventListener('keydown', k); window.removeEventListener('keyup', kup); };
@@ -757,6 +798,7 @@ export function Canvas(props: {
       <div className="canvas__hud">
         <div ref={guideX} className="guide is-x" />
         <div ref={guideY} className="guide is-y" />
+        <div ref={band} className="marquee" />
         {props.hud && pieces.map((p) => {
           const b = p.box;
           const s: HudState = { hover: hover === p.id, selected: sel.has(p.id), lifted: lifted.includes(p.id) || (busy && sel.has(p.id)), anyHover: !!hover };
