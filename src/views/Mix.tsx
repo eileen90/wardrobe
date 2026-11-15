@@ -10,17 +10,19 @@ import { getState, saveSettings, useStore } from '../lib/store';
 import type { Item, Placed, WorkingLook } from '../lib/types';
 
 export type Pools = Record<RailId, Item[]>;
-export const poolsOf = (items: Item[], wish: boolean): Pools => {
-  const ready = items.filter((i) => i.state === 'ready' && (wish || i.status === 'owned'));
-  return Object.fromEntries(RAILS.map((r) => [r.id, ready.filter((i) => (r.cats as readonly string[]).includes(i.category))])) as Pools;
-};
+/**
+ * Every piece of each kind, the wishlist's too, whether or not its cut-out is ready yet (a photo
+ * lies there as a print until it is): nothing is hidden from the looks.
+ */
+export const poolsOf = (items: Item[]): Pools =>
+  Object.fromEntries(RAILS.map((r) => [r.id, items.filter((i) => (r.cats as readonly string[]).includes(i.category))])) as Pools;
 
 export function useOutfit(shown = true) {
   const items = useStore((s) => s.items);
   const stored = useStore((s) => s.settings.working);
   const find = useMemo(() => finder(items), [items]);
   const work = useMemo(() => upgradeWorking(stored ?? EMPTY, find), [stored, find]);
-  const pools = useMemo(() => poolsOf(items, work.wish), [items, work.wish]);
+  const pools = useMemo(() => poolsOf(items), [items]);
   const anything = RAILS.some((r) => pools[r.id].length);
   /** What is worn: only pieces still in the closet. */
   const pieces = useMemo(() => work.pieces.filter((p) => find(p.itemId)), [work.pieces, find]);
@@ -39,7 +41,9 @@ export function useOutfit(shown = true) {
   const start = () => {
     let ps: Placed[] = [];
     for (const r of ['top', 'bottom', 'shoes'] as RailId[]) {
-      const it = pools[r].find((i) => i.category !== 'dress') ?? pools[r][0];
+      // Something of her own, cut out, before a wish or a photo.
+      const rank = (i: Item) => (i.status === 'owned' ? 0 : 2) + (i.state === 'ready' ? 0 : 1);
+      const it = [...pools[r]].sort((a, b) => rank(a) - rank(b)).find((i) => i.category !== 'dress') ?? pools[r][0];
       if (it) ps = addTo(ps, it, find).pieces;
     }
     return ps;
@@ -58,7 +62,6 @@ export function useOutfit(shown = true) {
     add: (item: Item, at?: { x: number; y: number }, avoid: B[] = []) => {
       const r = addTo(cur().pieces, item, find, at, avoid);
       setPieces(r.pieces, `Put on the ${RAIL[railOf(item)].label}`);
-      if (item.status === 'wish' && !cur().wish) void saveSettings({ working: { ...cur(), wish: true } });
       return r.id;
     },
     /** The next piece of a kind nobody is wearing yet. */
@@ -87,6 +90,8 @@ export function useOutfit(shown = true) {
       }
       setPieces(ps, 'Changed', { key: 'swap:' + ids.join(), quiet: true });
     },
+    /** Put this item on in place of a piece. */
+    replace: (pid: string, item: Item) => setPieces(swap(cur().pieces, pid, item, find), 'Changed', { key: 'swap:' + pid, quiet: true }),
     /** Every piece not kept, one step along its kind. */
     stepAll: (d: number) => {
       const w = cur();
@@ -119,7 +124,6 @@ export function useOutfit(shown = true) {
       set({ ...w, kept }, all ? `Let go of ${what}` : `Kept ${what}`);
     },
     letGo: () => set({ ...cur(), kept: [] }, 'Let go'),
-    wish: () => { const w = cur(); set({ ...w, wish: !w.wish }, w.wish ? 'Wishlist hidden' : 'Wishlist shown', { quiet: true }); },
     /** Take off every piece showing one of these items. */
     takeOff: (itemIds: string[]) => setPieces(cur().pieces.filter((p) => !itemIds.includes(p.itemId)), 'Took off'),
     edit: (a: Edit, ids: string[], arg: EditArg = {}, key?: string) => {

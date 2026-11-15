@@ -7,7 +7,7 @@ import {
   PX, type FloorLayout, type GroupId,
 } from '../lib/floor';
 import { LABELS, type PieceAction } from '../lib/boards';
-import { realSize } from '../lib/kind';
+import { trueSize as realSize } from '../lib/size';
 import { covered, held, hint, isKey, isPointer, useBindings } from '../lib/shortcuts';
 import { getState, saveSettings, updateItem, useStore } from '../lib/store';
 import { CATEGORIES, catPlural, type Category, type Item } from '../lib/types';

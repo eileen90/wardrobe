@@ -1,4 +1,4 @@
-import { realSize } from './kind';
+import { trueSize } from './size';
 import { BOARD_RATIO, uid, type Category, type Item, type Look, type Placed } from './types';
 
 /* ---------- boards as canvases ---------- */
@@ -30,7 +30,7 @@ export const LAYER = ['outer', 'bottom', 'top', 'socks', 'shoes', 'bag', 'extra'
  */
 export function flatLay(picks: { rail: string; item: Item }[]): { rail: string; x: number; y: number; w: number }[] {
   const by = (r: string) => picks.find((p) => p.rail === r)?.item;
-  const size = (i?: Item) => (i ? realSize(i) : null);
+  const size = (i?: Item) => (i ? trueSize(i) : null);
   const top = by('top'), bottom = by('bottom'), outer = by('outer');
   const isDress = top?.category === 'dress';
   const T = size(top), B = isDress ? null : size(bottom), O = size(outer);
@@ -100,7 +100,7 @@ const boxOf = (p: Placed, item: Item): Box => ({ x: p.x, y: p.y, w: p.w, h: (p.w
 function boardScale(pieces: Placed[], items: Item[]): number {
   const find = finder(items);
   const ks = pieces
-    .map((p) => { const it = find(p.itemId); return it && p.w > 0 ? realSize(it).w / p.w : 0; })
+    .map((p) => { const it = find(p.itemId); return it && p.w > 0 ? trueSize(it).w / p.w : 0; })
     .filter((k) => k > 0 && Number.isFinite(k))
     .sort((a, b) => a - b);
   return ks.length ? ks[Math.floor(ks.length / 2)] : EMPTY_CM * BOARD_RATIO;
@@ -108,7 +108,7 @@ function boardScale(pieces: Placed[], items: Item[]): number {
 
 /** How wide a piece would be on this board, as a fraction of its width. */
 export function widthOn(item: Item, pieces: Placed[], items: Item[]): number {
-  return realSize(item).w / boardScale(pieces, items);
+  return trueSize(item).w / boardScale(pieces, items);
 }
 
 /* ---------- where a new piece goes ---------- */
@@ -201,7 +201,7 @@ function scaleAll(pieces: Placed[], k: number, cx = 0.5, cy = 0.5, tx = 0.5, ty 
  */
 export function addPiece(pieces: Placed[], items: Item[], item: Item, at?: { x: number; y: number }): Placed[] {
   const find = finder(items);
-  const s = realSize(item);
+  const s = trueSize(item);
   const cmW = boardScale(pieces, items);
   let w = s.w / cmW, h = (s.h / cmW) * BOARD_RATIO;
   let out = pieces;
@@ -301,11 +301,9 @@ export const LABELS: Record<Edit, string> = {
 
 /** How big a saved look's area is drawn, as a share of a full board, unless resized. */
 export const AREA_S = 0.42;
-const GAP = 90;
 export const areaScale = (l: Pick<Look, 's'>) => l.s ?? AREA_S;
 
 export interface Rect { x0: number; y0: number; x1: number; y1: number }
-const meets = (a: Rect, b: Rect) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 
 /** A saved look's area on the board, in board units. */
 export function areaRect(l: Pick<Look, 's' | 'at'>): Rect {
@@ -313,29 +311,43 @@ export function areaRect(l: Pick<Look, 's' | 'at'>): Rect {
   return { x0: at.x, y0: at.y, x1: at.x + BW * s, y1: at.y + BH * s };
 }
 
-/**
- * The nearest free place for a new area of scale `s`: beside the outfit first, then in rings
- * around it, never over the outfit or another area.
+/*
+ * Saved looks lie in a grid under the outfit, all the same size, newest first, in rows about
+ * as wide as the outfit's board: three across, on a laptop and a phone alike.
  */
-export function freeSpot(taken: Rect[], outfit: Rect, s = AREA_S): { x: number; y: number } {
-  const w = BW * s, h = BH * s;
-  const cx = (outfit.x0 + outfit.x1) / 2, cy = (outfit.y0 + outfit.y1) / 2;
-  const pad = { x0: outfit.x0 - GAP, y0: outfit.y0 - GAP, x1: outfit.x1 + GAP, y1: outfit.y1 + GAP };
-  const sx = w + GAP, sy = h + GAP;
-  const cells: { x: number; y: number; d: number }[] = [];
-  const add = (x: number, y: number) => cells.push({ x, y, d: Math.hypot((x + w / 2 - cx) * 0.8, (y + h / 2 - cy) * 1.2) });
-  // Columns just clear of the outfit on either side, rows lined up with its top...
-  for (let j = -6; j <= 6; j++) for (let i = 0; i < 8; i++) { add(pad.x1 + i * sx, outfit.y0 + j * sy); add(pad.x0 - w - i * sx, outfit.y0 + j * sy); }
-  // ...and rows under and over it.
-  for (let j = 0; j < 5; j++) for (let i = -2; i <= 1; i++) { add(cx + i * sx + GAP / 2, pad.y1 + j * sy); add(cx + i * sx + GAP / 2, pad.y0 - h - j * sy); }
-  cells.sort((a, b) => a.d - b.d);
-  for (const c of cells) {
-    const r = { x0: c.x - GAP / 3, y0: c.y - GAP / 3, x1: c.x + w + GAP / 3, y1: c.y + h + GAP / 3 };
-    if (meets(r, pad) || taken.some((t) => meets(r, t))) continue;
-    return { x: c.x, y: c.y };
-  }
-  const right = Math.max(outfit.x1, ...taken.map((t) => t.x1));
-  return { x: right + GAP, y: outfit.y0 };
+export const GRID_S = 0.3;
+export const GRID_COLS = 3;
+const GRID_GAP = (BW - GRID_COLS * BW * GRID_S) / (GRID_COLS - 1);
+/** Room over each row for the looks' names. */
+const GRID_ROW_GAP = 110;
+
+/** The top left corner of the i-th place in the grid whose top is at `top`. */
+export function gridCell(i: number, top: number): { x: number; y: number } {
+  const col = i % GRID_COLS, row = Math.floor(i / GRID_COLS);
+  return { x: col * (BW * GRID_S + GRID_GAP), y: top + row * (BH * GRID_S + GRID_ROW_GAP) };
+}
+/** The place in a grid of n looks nearest to a point (an area's middle). */
+export function gridIndex(cx: number, cy: number, top: number, n: number): number {
+  const w = BW * GRID_S, h = BH * GRID_S;
+  const col = Math.min(GRID_COLS - 1, Math.max(0, Math.round((cx - w / 2) / (w + GRID_GAP))));
+  const row = Math.max(0, Math.round((cy - top - h / 2) / (h + GRID_ROW_GAP)));
+  return Math.min(n - 1, row * GRID_COLS + col);
+}
+/**
+ * Looks in grid order: by their place in it, then (looks from before the grid) by where they
+ * lay on the board, top to bottom and left to right, then newest first.
+ */
+export function gridOrder(looks: Look[]): Look[] {
+  return [...looks].sort((a, b) =>
+    (a.order ?? Infinity) - (b.order ?? Infinity)
+    || (a.order === undefined && b.order === undefined
+      ? (a.at?.y ?? Infinity) - (b.at?.y ?? Infinity) || (a.at?.x ?? 0) - (b.at?.x ?? 0)
+      : 0)
+    || b.createdAt - a.createdAt);
+}
+/** Every look with its area in its place in the grid. */
+export function inGrid(looks: Look[], top: number): Look[] {
+  return gridOrder(looks).map((l, i) => ({ ...l, at: gridCell(i, top), s: GRID_S }));
 }
 
 /** What a change is called; growing and turning together reads as a turn when nothing grew. */

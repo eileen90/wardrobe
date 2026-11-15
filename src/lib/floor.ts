@@ -9,7 +9,8 @@
  * given one: the free spot nearest the middle of their own bubble, which grows around it.
  */
 import { between, hits, readingOrder, seeded, type Box, type Rect } from './canvas';
-import { drawn, realSize } from './kind';
+import { drawn } from './kind';
+import { trueSize as realSize } from './size';
 import { CATEGORIES, catPlural, type Category, type Item } from './types';
 
 /** Pieces whose kind is not known yet wait apart, so they do not pose as tops. */

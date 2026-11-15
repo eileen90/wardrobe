@@ -4,7 +4,7 @@
  * it; every other piece stays where it was put (a second top lands beside the first, to compare).
  */
 import { fitBoard, flatLay, LAYER, LOOK_CM } from './boards';
-import { realSize } from './kind';
+import { trueSize } from './size';
 import { BOARD_RATIO, uid, type Category, type Item, type Placed, type WorkingLook } from './types';
 
 /** The kinds an outfit is built from. Tops and dresses share one. */
@@ -32,16 +32,19 @@ export const finder = (items: Item[]): Find => {
 
 /** Height as a share of the board's height, for a width given as a share of its width. */
 const hOf = (w: number, item: Item) => (w / (item.aspect || 1)) * BOARD_RATIO;
-const trueW = (item: Item) => realSize(item).w / LOOK_CM;
+const trueW = (item: Item) => trueSize(item).w / LOOK_CM;
 
-/** Bring an outfit saved by an earlier version (one piece per kind, kept kinds) up to date. */
+/**
+ * Bring an outfit saved by an earlier version (one piece per kind, kept kinds) up to date. The
+ * pieces nobody moved by hand are laid out afresh, so they always lie at today's true sizes.
+ */
 export function upgradeWorking(w: WorkingLook, find: Find): WorkingLook {
   const rails = new Set<string>(RAILS.map((r) => r.id));
   const ids = new Set(w.pieces.map((p) => p.id));
-  if (w.kept.every((k) => ids.has(k)) && w.pieces.every((p) => p.rail)) return w;
+  if (w.kept.every((k) => ids.has(k)) && w.pieces.every((p) => p.rail)) return { ...w, pieces: layout(w.pieces, find) };
   const pieces = w.pieces.map((p) => { const it = find(p.itemId); return p.rail || !it ? p : { ...p, rail: railOf(it) }; });
   const kept = w.kept.flatMap((k) => (ids.has(k) ? [k] : rails.has(k) ? pieces.filter((p) => p.rail === k).map((p) => p.id) : []));
-  return { ...w, pieces, kept };
+  return { ...w, pieces: layout(pieces, find), kept };
 }
 
 /** Put the pieces nobody moved by hand back where a flat lay puts them. */
@@ -53,9 +56,34 @@ export function layout(pieces: Placed[], find: Find): Placed[] {
     const r = railOf(it);
     if (!lead.has(r)) lead.set(r, p);
   }
-  const lay = flatLay([...lead].map(([rail, p]) => ({ rail, item: find(p.itemId)! })));
-  const at = new Map(lay.map((l) => [lead.get(l.rail)!.id, l]));
+  const lay = flatLay(withSlot([...lead].map(([rail, p]) => ({ rail, item: find(p.itemId)! })), pieces, find));
+  const at = new Map(lay.flatMap((l) => { const p = lead.get(l.rail); return p ? [[p.id, l] as const] : []; }));
   return pieces.map((p) => { const l = at.get(p.id); return l ? { ...p, x: l.x, y: l.y, w: l.w, rot: 0 } : p; });
+}
+
+/** A pair of shoes of no particular kind, for keeping their place under the hem. */
+const SHOES = { id: '', name: '', category: 'shoes', aspect: 2.2, state: 'ready' } as Item;
+/**
+ * Shoes always have their place under the hem: with none on, the flat lay leaves room for a
+ * pair, so putting one on moves nothing else.
+ */
+function withSlot(picks: { rail: string; item: Item }[], pieces: Placed[], find: Find) {
+  const body = picks.some((p) => p.rail === 'top' || p.rail === 'bottom');
+  const shod = pieces.some((p) => { const it = find(p.itemId); return it && railOf(it) === 'shoes'; });
+  return body && !shod ? [...picks, { rail: 'shoes', item: SHOES }] : picks;
+}
+
+/** Where shoes would lie, in shares of the board, while the outfit has none on. */
+export function shoeSlot(pieces: Placed[], find: Find): B | null {
+  const lead = new Map<string, Item>();
+  for (const p of pieces) {
+    const it = find(p.itemId);
+    if (it && !p.byHand && !lead.has(railOf(it))) lead.set(railOf(it), it);
+  }
+  const picks = withSlot([...lead].map(([rail, item]) => ({ rail, item })), pieces, find);
+  if (!picks.some((p) => p.item === SHOES)) return null;
+  const l = flatLay(picks).find((x) => x.rail === 'shoes');
+  return l ? { x: l.x, y: l.y, w: l.w, h: hOf(l.w, SHOES) } : null;
 }
 
 /** A box in shares of the board, for finding room. */
@@ -120,7 +148,7 @@ export function swap(pieces: Placed[], pid: string, item: Item, find: Find, rela
     if (p.id !== pid) return p;
     const old = find(p.itemId);
     if (!old) return { ...p, itemId: item.id };
-    const w = p.w * (realSize(item).w / realSize(old).w);
+    const w = p.w * (trueSize(item).w / trueSize(old).w);
     const top = p.y - hOf(p.w, old) / 2;
     return { ...p, itemId: item.id, w, y: top + hOf(w, item) / 2 };
   });

@@ -4,22 +4,30 @@ import type { Item } from '../lib/types';
 import { Garment, Icon } from '../ui';
 
 /**
- * The pieces to put on, in a glass strip over the dock: one kind or all of them. A tap puts a
- * piece on (or takes it off again); dragged up out of the strip, it lands where it is let go.
+ * The pieces to put on, in a glass strip over the dock: one kind or all of them. Adding, a tap
+ * puts a piece on (or takes it off again); replacing (opened from a selected piece), a tap puts
+ * it on in that piece's place, so one is ever chosen. Dragged up out of the strip, a piece lands
+ * where it is let go.
  */
-export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, ghostWidth, onClose }: {
+export function RailPicker({ kinds, kind, onKind, mode = 'add', pool, on, onPick, onDrop, onHover, onAdd, ghostWidth, onClose }: {
   kinds: { id: string; title: string }[];
   /** the kind shown, or 'all' */
   kind: string;
   onKind: (k: string) => void;
+  /** a pick adds a piece (or takes it off again), or replaces the selected one */
+  mode?: 'add' | 'replace';
   pool: Item[];
   /** items already on the board being worked on */
   on: Set<string>;
   onPick: (item: Item) => void;
   /** a piece carried out of the strip was let go here (client coordinates) */
   onDrop: (item: Item, x: number, y: number) => void;
-  /** how wide a piece would be on the board, on screen */
-  ghostWidth: (item: Item) => number;
+  /** a piece carried out of the strip is over this point (null: put down) */
+  onHover?: (x: number | null, y?: number) => void;
+  /** add pieces to the closet, offered when a kind has none */
+  onAdd?: () => void;
+  /** how wide a piece would be on the board, on screen (let go at this point) */
+  ghostWidth: (item: Item, x?: number, y?: number) => number;
   onClose: () => void;
 }) {
   const strip = useRef<HTMLDivElement>(null);
@@ -46,12 +54,14 @@ export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, ghos
       try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* gone */ }
     }
     setGhost({ item, x: e.clientX, y: e.clientY });
+    onHover?.(e.clientX, e.clientY);
   };
   const pullUp = (e: React.PointerEvent, item: Item) => {
     const p = pull.current;
     pull.current = null;
     if (!p?.out) return;
     setGhost(null);
+    onHover?.(null);
     pulled.current = true;
     setTimeout(() => { pulled.current = false; }, 60);
     const r = strip.current?.closest('.pick')?.getBoundingClientRect();
@@ -61,8 +71,9 @@ export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, ghos
 
   const title = kinds.find((k) => k.id === kind)?.title ?? 'everything';
   return (
-    <div className="pick glass" role="dialog" aria-label={`Choose ${title}`}>
+    <div className={'pick glass is-' + mode} role="dialog" aria-label={`Choose ${title}`}>
       <div className="pick__head">
+        <span className="pick__mode">{mode === 'replace' ? 'replace' : 'add'}</span>
         <div className="pick__kinds chips is-row">
           <button className="pill is-small" aria-pressed={kind === 'all'} onClick={() => onKind('all')}>everything</button>
           {kinds.map((k) => (
@@ -81,10 +92,12 @@ export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, ghos
             {it.status === 'wish' && <span className="tag">wishlist</span>}
           </button>
         ))}
-        {!pool.length && <span className="pick__none small muted">Nothing here yet.</span>}
+        {!pool.length && (onAdd
+          ? <button className="pill is-small is-add pick__none" onClick={onAdd}><Icon name="plus" />add</button>
+          : <span className="pick__none small muted">Nothing here yet.</span>)}
       </div>
       {ghost && (() => {
-        const w = ghostWidth(ghost.item), h = w / (ghost.item.aspect || 1);
+        const w = ghostWidth(ghost.item, ghost.x, ghost.y), h = w / (ghost.item.aspect || 1);
         return createPortal(
           <div className="ghost" style={{ width: w, height: h, transform: `translate3d(${ghost.x - w / 2}px, ${ghost.y - h / 2}px, 0)` }}>
             <Garment item={ghost.item} size="full" />

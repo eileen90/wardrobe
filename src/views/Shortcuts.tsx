@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  byModifier, bindingOf, defaultOf, describe, modName, modifierOf, rebind, setRecording, SHORTCUTS, useBindings,
+  byModifier, bindingOf, defaultOf, describe, hint, modName, modifierOf, rebind, setRecording, SHORTCUTS, useBindings,
   withModifier, bindingFrom, held, type Mod, type ShortcutId,
 } from '../lib/shortcuts';
 import { Icon, Sheet, toast } from '../ui';
 
-const GROUPS = [...new Set(SHORTCUTS.map((s) => s.where))];
+/** Grouped by where they work; the keys for selected pieces apart, so the columns come out even. */
+const groupOf = (s: (typeof SHORTCUTS)[number]) => (s.selected ? 'Pieces selected' : s.where);
+const GROUPS = [...new Set(SHORTCUTS.map(groupOf))];
 
 /** One shortcut's binding: pressed anew from the keyboard, or, for gestures and arrows, a modifier chosen. */
 function Binding({ id, open, onOpen }: { id: ShortcutId; open: boolean; onOpen: (on: boolean) => void }) {
@@ -50,7 +52,7 @@ function Binding({ id, open, onOpen }: { id: ShortcutId; open: boolean; onOpen: 
       )) : (
         <button className="pill is-key" aria-pressed={listening} aria-label={`Change: ${describe(bindingOf(id))}`}
           onClick={() => onOpen(!open)}>
-          {listening ? 'press keys' : describe(bindingOf(id))}
+          {listening ? 'press keys' : hint(id)}
         </button>
       )}
       {changed && !open && (
@@ -61,21 +63,21 @@ function Binding({ id, open, onOpen }: { id: ShortcutId; open: boolean; onOpen: 
   );
 }
 
-/** Every shortcut, grouped by where it works; in Settings each one can be changed. */
+/** Every shortcut in columns, grouped by where it works; in Settings each one can be changed. */
 export function ShortcutList({ edit = false }: { edit?: boolean }) {
   useBindings();
   const [open, setOpen] = useState<ShortcutId | null>(null);
   return (
-    <div className="keys">
+    <div className={'keys is-columns' + (edit ? ' is-edit' : '')}>
       {GROUPS.map((g) => (
         <div key={g} className="keys__group">
           <span className="label">{g}</span>
-          {SHORTCUTS.filter((s) => s.where === g).map((s) => (
+          {SHORTCUTS.filter((s) => groupOf(s) === g).map((s) => (
             <div key={s.id} className="keys__row">
-              <span>{s.label}</span>
+              <span className="keys__label">{s.label}</span>
               {edit
                 ? <Binding id={s.id} open={open === s.id} onOpen={(on) => setOpen(on ? s.id : null)} />
-                : <kbd className="pill is-key">{describe(bindingOf(s.id))}</kbd>}
+                : <kbd className="pill is-key">{hint(s.id)}</kbd>}
             </div>
           ))}
         </div>
