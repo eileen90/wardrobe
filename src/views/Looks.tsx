@@ -361,7 +361,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
 
   /* ----- putting pieces on ----- */
   /** Kinds there is something of; shoes always, so they have a place before there are any. */
-  const strips = RAILS.filter((r) => r.id === 'shoes' || fit.pools[r.id].length || (look && poolsOf(items, true)[r.id].length));
+  const strips = RAILS.filter((r) => r.id === 'shoes' || fit.pools[r.id].length || (look && poolsOf(items)[r.id].length));
   /** Put on the next piece of a kind nobody is wearing; with none to put on, show the kind. */
   const addKind = (r: RailId) => { const it = fit.unworn(r); if (it) putOn(it); else openStrip(r); };
   /** The piece a pick in the strip replaces, while it is still there. */
@@ -384,7 +384,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   };
   const slot = useMemo(() => (look ? null : shoeSlot(fit.pieces, fit.find)), [look, fit.pieces, fit.find]);
   const stripPool = useMemo(() => {
-    const pools = look ? poolsOf(items, true) : fit.pools;
+    const pools = look ? poolsOf(items) : fit.pools;
     return strip === 'all' ? RAILS.flatMap((r) => pools[r.id]) : strip ? pools[strip as RailId] ?? [] : [];
   }, [strip, look, items, fit.pools]);
   const onBoard = useMemo(() => new Set(livePieces.map((p) => p.itemId)), [livePieces]);
@@ -493,7 +493,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   };
   const stepPieces = (ids: string[], d: number) => {
     if (!look) return fit.step(ids, d);
-    const pools = poolsOf(items, true);
+    const pools = poolsOf(items);
     let ps = look.pieces;
     for (const id of ids) {
       const p = ps.find((q) => q.id === id), it = p && byId.get(p.itemId);
@@ -593,7 +593,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
       </>
     );
   };
-  const pools = look ? poolsOf(items, true) : fit.pools;
+  const pools = look ? poolsOf(items) : fit.pools;
   const hud = (p: CanvasPiece, at: { x: number; y: number; w: number; h: number }, s: { selected: boolean; lifted: boolean }) => {
     if (!s.selected || s.lifted || sel.size !== 1) return null;
     const n = pools[railOf(p.item)].length;
@@ -609,7 +609,13 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
       </>
     );
   };
-  const decorate = (p: CanvasPiece) => (!look && fit.work.kept.includes(p.id) ? <span className="kept"><Icon name="lock" /></span> : null);
+  /** On the outfit, a kept piece shows its lock and a wish its tag; a saved look stays clean, as it is exported. */
+  const decorate = (p: CanvasPiece) => (look ? null : (
+    <>
+      {fit.work.kept.includes(p.id) && <span className="kept"><Icon name="lock" /></span>}
+      {p.item.status === 'wish' && <span className="tag">wishlist</span>}
+    </>
+  ));
 
   const share = async (l: Look) => {
     const r = await shareLook(l, items);
@@ -688,7 +694,6 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
         </div>
       ) : (
         <div className="mix__layers">
-          <button className="pill is-small" aria-pressed={fit.work.wish} onClick={fit.wish}>wishlist</button>
           {fit.work.kept.length > 0 && <button className="pill is-small" onClick={fit.letGo}><Icon name="unlock" />let go</button>}
           {RAILS.filter((r) => r.id === 'shoes' || fit.pools[r.id].length).map((r) => (
             <button key={r.id} className="pill is-small is-add" disabled={!!fit.pools[r.id].length && !fit.unworn(r.id)} onClick={() => addKind(r.id)} aria-label={`Add a ${r.label}`}><Icon name="plus" />{r.label}</button>

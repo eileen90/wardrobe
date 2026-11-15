@@ -2377,3 +2377,8 @@ kbd.pill.is-key {
     transform: translateX(-50%);
   }
 }
+/* A wish on the outfit keeps its tag readable however far out the board is. */
+.looks .piece .tag {
+  transform: translateX(-50%) scale(var(--zi, 1)) rotate(var(--unrot, 0deg));
+  transform-origin: 50% 100%;
+}
