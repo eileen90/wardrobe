@@ -4,14 +4,18 @@ import type { Item } from '../lib/types';
 import { Garment, Icon } from '../ui';
 
 /**
- * The pieces to put on, in a glass strip over the dock: one kind or all of them. A tap puts a
- * piece on (or takes it off again); dragged up out of the strip, it lands where it is let go.
+ * The pieces to put on, in a glass strip over the dock: one kind or all of them. Adding, a tap
+ * puts a piece on (or takes it off again); replacing (opened from a selected piece), a tap puts
+ * it on in that piece's place, so one is ever chosen. Dragged up out of the strip, a piece lands
+ * where it is let go.
  */
-export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, onAdd, ghostWidth, onClose }: {
+export function RailPicker({ kinds, kind, onKind, mode = 'add', pool, on, onPick, onDrop, onAdd, ghostWidth, onClose }: {
   kinds: { id: string; title: string }[];
   /** the kind shown, or 'all' */
   kind: string;
   onKind: (k: string) => void;
+  /** a pick adds a piece (or takes it off again), or replaces the selected one */
+  mode?: 'add' | 'replace';
   pool: Item[];
   /** items already on the board being worked on */
   on: Set<string>;
@@ -63,8 +67,9 @@ export function RailPicker({ kinds, kind, onKind, pool, on, onPick, onDrop, onAd
 
   const title = kinds.find((k) => k.id === kind)?.title ?? 'everything';
   return (
-    <div className="pick glass" role="dialog" aria-label={`Choose ${title}`}>
+    <div className={'pick glass is-' + mode} role="dialog" aria-label={`Choose ${title}`}>
       <div className="pick__head">
+        <span className="pick__mode">{mode === 'replace' ? 'replace' : 'add'}</span>
         <div className="pick__kinds chips is-row">
           <button className="pill is-small" aria-pressed={kind === 'all'} onClick={() => onKind('all')}>everything</button>
           {kinds.map((k) => (

@@ -87,6 +87,8 @@ export function useOutfit(shown = true) {
       }
       setPieces(ps, 'Changed', { key: 'swap:' + ids.join(), quiet: true });
     },
+    /** Put this item on in place of a piece. */
+    replace: (pid: string, item: Item) => setPieces(swap(cur().pieces, pid, item, find), 'Changed', { key: 'swap:' + pid, quiet: true }),
     /** Every piece not kept, one step along its kind. */
     stepAll: (d: number) => {
       const w = cur();

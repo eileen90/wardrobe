@@ -105,6 +105,9 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   const [inLook, setInLook] = useState<string | null>(null);
   const [sel, setSel] = useState<Set<string>>(() => new Set());
   const [strip, setStrip] = useState<string | null>(null);
+  /** The piece the strip changes: opened from a selected piece, a pick replaces it; otherwise a pick adds. */
+  const [swapFor, setSwapFor] = useState<string | null>(null);
+  const openStrip = (k: string | null, forId: string | null = null) => { setStrip(k); setSwapFor(k ? forId : null); };
   const [target, setTarget] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
   const [papers, setPapers] = useState(false);
@@ -342,7 +345,25 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   /** Kinds there is something of; shoes always, so they have a place before there are any. */
   const strips = RAILS.filter((r) => r.id === 'shoes' || fit.pools[r.id].length || (look && poolsOf(items, true)[r.id].length));
   /** Put on the next piece of a kind nobody is wearing; with none to put on, show the kind. */
-  const addKind = (r: RailId) => { const it = fit.unworn(r); if (it) putOn(it); else setStrip(r); };
+  const addKind = (r: RailId) => { const it = fit.unworn(r); if (it) putOn(it); else openStrip(r); };
+  /** The piece a pick in the strip replaces, while it is still there. */
+  const swapped = swapFor ? livePieces.find((p) => p.id === swapFor) ?? null : null;
+  // The strip follows the selection while it replaces: another piece picked, it changes that one.
+  useEffect(() => {
+    if (!swapFor) return;
+    const one = sel.size === 1 ? [...sel][0] : null;
+    if (one === swapFor) return;
+    const p = one ? livePieces.find((q) => q.id === one) : null, it = p && byId.get(p.itemId);
+    if (it) { setSwapFor(p.id); setStrip(railOf(it)); } else setSwapFor(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel]);
+  /** Put this item on in place of a piece, where that piece lies. */
+  const replace = (pid: string, item: Item) => {
+    const p = livePieces.find((q) => q.id === pid);
+    if (!p || p.itemId === item.id) return;
+    if (!look) return fit.replace(pid, item);
+    commitLook(look, swap(look.pieces, pid, item, (x) => byId.get(x), false), 'Changed', { key: 'swap:' + pid, quiet: true });
+  };
   const slot = useMemo(() => (look ? null : shoeSlot(fit.pieces, fit.find)), [look, fit.pieces, fit.find]);
   const stripPool = useMemo(() => {
     const pools = look ? poolsOf(items, true) : fit.pools;
@@ -407,7 +428,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     const handled = () => e.preventDefault();
     const mine = ids.filter((id) => !isArea(id));
     if (isKey(e, 'close')) {
-      if (papers) { handled(); setPapers(false); } else if (strip) { handled(); setStrip(null); } else if (!ids.length && look) { handled(); go(null); }
+      if (papers) { handled(); setPapers(false); } else if (strip) { handled(); openStrip(null); } else if (!ids.length && look) { handled(); go(null); }
       return;
     }
     if (isKey(e, 'next') || isKey(e, 'prev')) {
@@ -429,9 +450,9 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     if (isKey(e, 'pickAll')) {
       if (ids.length === 1 && isArea(ids[0])) { handled(); const id = ids[0].slice(AREA.length); if (id === 'fit') go(null); else go(id); return; }
       handled();
-      const p = livePieces.find((q) => q.id === mine[0]), it = p && byId.get(p.itemId);
+      const p = mine.length === 1 ? livePieces.find((q) => q.id === mine[0]) : null, it = p && byId.get(p.itemId);
       const want = it ? railOf(it) : 'all';
-      setStrip(strip === want ? null : want);
+      openStrip(strip === want ? null : want, p ? p.id : null);
       return;
     }
     if (isKey(e, 'shuffle') && !look) { handled(); fit.shuffle(); return; }
@@ -525,7 +546,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
         )}
         {r && (
           <button className="hud__btn" aria-pressed={strip === r} aria-label={`All ${RAIL[r].title}`} title={`All ${RAIL[r].title} (${hint('pickAll')})`}
-            onClick={() => setStrip(strip === r ? null : r)}><Icon name="grid" /></button>
+            onClick={() => openStrip(strip === r && swapFor === one!.id ? null : r, one!.id)}><Icon name="grid" /></button>
         )}
         <i className="hud__sep" />
         <ToolBtn a="forward" onClick={() => edit('forward', ids)} />
@@ -647,19 +668,20 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
         <RailPicker
           kinds={strips.map((r) => ({ id: r.id, title: r.title }))}
           kind={strip}
-          onKind={setStrip}
+          onKind={(k) => { if (swapFor && k !== strip) setSwapFor(null); setStrip(k); }}
+          mode={swapped ? 'replace' : 'add'}
           pool={stripPool}
-          on={onBoard}
-          onPick={pick}
+          on={swapped ? new Set([swapped.itemId]) : onBoard}
+          onPick={(it) => (swapped ? replace(swapped.id, it) : pick(it))}
           onDrop={dropped}
           onAdd={onAdd}
           ghostWidth={ghostWidth}
-          onClose={() => setStrip(null)}
+          onClose={() => openStrip(null)}
         />
       )}
 
       <div className="dock">
-        <button className="round glass" aria-label="Pieces" aria-pressed={!!strip} title={`Pieces (${hint('pickAll')})`} onClick={() => setStrip(strip ? null : 'all')}><Icon name="grid" /></button>
+        <button className="round glass" aria-label="Pieces" aria-pressed={!!strip} title={`Pieces (${hint('pickAll')})`} onClick={() => openStrip(strip ? null : 'all')}><Icon name="grid" /></button>
         {look ? (
           <button className="go" onClick={() => go(null)} title={hint('close')}>Done</button>
         ) : (
