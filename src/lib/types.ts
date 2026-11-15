@@ -102,6 +102,8 @@ export interface Look {
   at?: { x: number; y: number };
   /** how big its area is drawn there, as a share of a full board */
   s?: number;
+  /** its place in the grid of saved looks under the outfit, smallest first (where it lies follows from this) */
+  order?: number;
 }
 
 export interface Settings {

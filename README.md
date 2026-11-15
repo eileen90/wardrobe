@@ -13,8 +13,8 @@ size, to mix into outfits.
   size, with as many pieces of any kind as you like (two tops side by side, to compare). Click a
   piece to select it: drag the corners to resize, the round handle to turn it, and the small
   toolbar to layer, flip, copy or remove it; the arrows beside it step through its kind. Keep
-  what you like, shuffle the rest and save it: every saved look lies around the outfit as its
-  own area, to move, resize and arrange. Double-click an area (or zoom in on it) to go in and
+  what you like, shuffle the rest and save it: saved looks lie in a grid under the outfit, newest
+  first, all the same size; drag one to another place in the grid. Double-click an area (or zoom in on it) to go in and
   change it with the same tools, its paper and its name; Esc, Done or a click outside steps back
   out. Drag a piece onto another look, or out of a look onto the board, and it moves there, at
   that place's scale.

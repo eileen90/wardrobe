@@ -132,6 +132,8 @@ export function Canvas(props: {
   hud?: (p: CanvasPiece, at: { x: number; y: number; w: number; h: number }, s: HudState) => ReactNode;
   /** extra marks on a piece (tags) */
   decorate?: (p: CanvasPiece) => ReactNode;
+  /** areas keep their size: no corner handles on them */
+  fixedAreas?: boolean;
   /** the floor was clicked, away from any piece (at a world point) */
   onEmpty?: (at: { x: number; y: number }) => void;
   api?: MutableRefObject<CanvasApi | null>;
@@ -812,7 +814,7 @@ export function Canvas(props: {
             width: f.w, height: f.h,
             transform: `translate3d(${f.x}px, ${f.y}px, 0) rotate(${f.rot}deg)`,
           }}>
-            {(['nw', 'ne', 'sw', 'se'] as const).map((c) => <i key={c} data-handle="scale" className={'frame__corner is-' + c} />)}
+            {!(props.fixedAreas && ids.every((id) => thingOf(id)?.area)) && (['nw', 'ne', 'sw', 'se'] as const).map((c) => <i key={c} data-handle="scale" className={'frame__corner is-' + c} />)}
             {turns && <i data-handle="turn" className="frame__turn" title="Turn" />}
           </div>
         )}

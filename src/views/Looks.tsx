@@ -1,13 +1,13 @@
 /**
- * Looks: one big board to live on. The outfit being put together lies in the middle; every saved
- * look lies around it as its own area, drawn small, to be moved, resized and gone into. Inside
+ * Looks: one big board to live on. The outfit being put together lies at the top; the saved looks
+ * lie in a grid under it, newest first, each drawn small, to be reordered and gone into. Inside
  * a look (double-click it, or zoom in on it) its pieces are edited in place with the same tools
  * as the outfit; Esc, Done or a click outside steps back out.
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { changeBoard, keepLook } from '../lib/actions';
 import {
-  addPiece, AREA_S, areaRect, areaScale, BH, BW, editPieces, freeSpot, labelOf, LOOK_CM, newLook, widthOn,
+  addPiece, areaRect, areaScale, BH, BW, editPieces, gridCell, GRID_COLS, gridIndex, gridOrder, GRID_S, inGrid, labelOf, LOOK_CM, newLook, widthOn,
   type Edit, type EditArg, type PieceAction, type Rect,
 } from '../lib/boards';
 import { bounds, type Box, type View } from '../lib/canvas';
@@ -15,7 +15,7 @@ import { shareLook } from '../lib/exportBoard';
 import { trueSize } from '../lib/size';
 import { addTo, asLook, KEY_ORDER, layout, nextOf, RAIL, RAILS, railOf, shoeSlot, swap, type RailId } from '../lib/outfit';
 import { hint, isDone, isKey, useBindings } from '../lib/shortcuts';
-import { getState, saveLook, useStore } from '../lib/store';
+import { saveLook, useStore } from '../lib/store';
 import { BOARD_RATIO, PAPERS, uid, type Item, type Look, type Placed, type WorkingLook } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, toast } from '../ui';
 import { Canvas, ToolBtn, type CanvasApi, type CanvasArea, type CanvasPiece, type SelBox, type Transform } from './Canvas';
@@ -99,7 +99,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   onAdd: () => void;
 }) {
   const items = useStore((s) => s.items);
-  const looks = useStore((s) => s.looks);
+  const stored = useStore((s) => s.looks);
   const fit = useOutfit(!hidden);
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const [inLook, setInLook] = useState<string | null>(null);
@@ -115,12 +115,6 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   const api = useRef<CanvasApi | null>(null);
   useBindings();
 
-  const look = inLook ? looks.find((l) => l.id === inLook) ?? null : null;
-  useEffect(() => { if (inLook && !look) setInLook(null); }, [inLook, look]);
-  useEffect(() => { setName(look?.name ?? ''); }, [look?.id, look?.name]);
-  const space = look ? spaceOf(look) : OUTFIT;
-  const livePieces = look ? look.pieces : fit.pieces;
-
   /* ----- the outfit's room on the board, and every look's area ----- */
   const outfitBoxes = useMemo(() => fit.pieces.flatMap((p, z) => { const it = byId.get(p.itemId); return it ? [boxIn(OUTFIT, p, it, z + 1)] : []; }), [fit.pieces, byId]);
   const room: Rect = useMemo(() => {
@@ -130,39 +124,24 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     const r = { x0: cx - BW * 0.36, x1: cx + BW * 0.36, y0: cy - BH * 0.42, y1: cy + BH * 0.42 };
     return all ? { x0: Math.min(r.x0, all.x0 - 30), y0: Math.min(r.y0, all.y0 - 30), x1: Math.max(r.x1, all.x1 + 30), y1: Math.max(r.y1, all.y1 + 30) } : r;
   }, [outfitBoxes]);
-  /** Where new areas keep clear of: the outfit's usual board, and wherever it has spread. */
-  const outfitZone = useMemo(() => ({ x0: Math.min(0, room.x0), y0: Math.min(0, room.y0), x1: Math.max(BW, room.x1), y1: Math.max(BH, room.y1) }), [room]);
-
-  // Looks saved before the board had places are given one, once.
+  /** The saved looks lie in a grid under the outfit, newest first. */
+  const gridTop = Math.max(BH, room.y1) + 110;
+  const looks = useMemo(() => inGrid(stored, gridTop), [stored, gridTop]);
+  /** The outfit as framed: with the first looks' names peeking in under it, to scroll down to. */
+  const outfitView: Rect = looks.length ? { ...room, y1: Math.max(room.y1, gridTop + 30) } : room;
+  const grid = useRef(looks);
+  grid.current = looks;
+  // Looks from before the grid take their places in it once, in the order they lay on the board.
   useEffect(() => {
-    const lost = looks.filter((l) => !l.at).sort((a, b) => a.createdAt - b.createdAt);
-    if (!lost.length) return;
-    const taken = looks.filter((l) => l.at).map(areaRect);
-    for (const l of lost) {
-      const at = freeSpot(taken, outfitZone, areaScale(l));
-      taken.push(areaRect({ ...l, at }));
-      void saveLook({ ...l, at, s: areaScale(l) });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [looks]);
+    if (stored.every((l) => l.order !== undefined)) return;
+    gridOrder(stored).forEach((l, i) => { if (l.order !== i) void saveLook({ ...l, order: i }); });
+  }, [stored]);
 
-  // The outfit grew into a look's area: the area steps aside, so nothing lies on the outfit.
-  useEffect(() => {
-    const all = bounds(outfitBoxes);
-    if (!all) return;
-    const busy = { x0: all.x0 - 40, y0: all.y0 - 40, x1: all.x1 + 40, y1: all.y1 + 40 };
-    const ls = getState().looks.filter((l) => l.at);
-    const hit = ls.filter((l) => { const r = areaRect(l); return r.x0 < busy.x1 && busy.x0 < r.x1 && r.y0 < busy.y1 && busy.y0 < r.y1; });
-    if (!hit.length) return;
-    const zone = { x0: Math.min(outfitZone.x0, busy.x0), y0: Math.min(outfitZone.y0, busy.y0), x1: Math.max(outfitZone.x1, busy.x1), y1: Math.max(outfitZone.y1, busy.y1) };
-    const taken = ls.filter((l) => !hit.includes(l)).map(areaRect);
-    for (const l of hit) {
-      const at = freeSpot(taken, zone, areaScale(l));
-      taken.push(areaRect({ ...l, at }));
-      void saveLook({ ...l, at });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outfitBoxes]);
+  const look = inLook ? looks.find((l) => l.id === inLook) ?? null : null;
+  useEffect(() => { if (inLook && !look) setInLook(null); }, [inLook, look]);
+  useEffect(() => { setName(look?.name ?? ''); }, [look?.id, look?.name]);
+  const space = look ? spaceOf(look) : OUTFIT;
+  const livePieces = look ? look.pieces : fit.pieces;
 
   const thumbs = useMemo(() => new Map(looks.map((l) => [l.id, <Area look={l} items={byId} />])), [looks, byId]);
   const outfitThumb = useMemo(() => <OutfitArea pieces={fit.pieces} items={byId} room={room} />, [fit.pieces, byId, room]);
@@ -197,8 +176,8 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     setSel(new Set());
     setPapers(false);
     if (!frame) return;
-    const l = id && getState().looks.find((x) => x.id === id);
-    setTimeout(() => api.current?.frame(l ? pad(areaRect(l), 0.04) : room, true), 0);
+    const l = id && grid.current.find((x) => x.id === id);
+    setTimeout(() => api.current?.frame(l ? pad(areaRect(l), 0.04) : outfitView, true), 0);
   };
   useEffect(() => { if (enter) go(enter.id); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [enter]);
   useEffect(() => { if (hidden) setSel(new Set()); }, [hidden]);
@@ -218,7 +197,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   const viewed = (v: View, size: { w: number; h: number }) => {
     if (hidden || !size.w) return;
     const cx = (size.w / 2 - v.x) / v.z, cy = (size.h / 2 - v.y) / v.z;
-    const ls = getState().looks;
+    const ls = grid.current;
     if (inLook) return;
     const hit = ls.find((l) => {
       if (!l.at) return false;
@@ -253,20 +232,26 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
 
   /** Areas moved, resized or removed: one step for all of them. */
   const areaIds = (ids: string[]) => ids.filter((id) => isArea(id) && id !== AREA + 'fit').map((id) => id.slice(AREA.length));
+  /**
+   * Looks carried within the grid take the place nearest where they were let go (arrow keys: the
+   * next place along); the rest close up around them. One step.
+   */
   const moveAreas = (ids: string[], dx: number, dy: number, key?: string) => {
-    const ls = areaIds(ids).flatMap((id) => { const l = looks.find((x) => x.id === id); return l?.at ? [{ ...l, at: { x: l.at.x + dx, y: l.at.y + dy } }] : []; });
-    if (ls.length) changeBoard({ looks: ls }, ls.length === 1 ? 'Moved the look' : `Moved ${ls.length} looks`, { key });
+    const moving = areaIds(ids);
+    const first = looks.findIndex((l) => moving.includes(l.id));
+    if (first < 0) return;
+    const r = areaRect(looks[first]);
+    const to = key
+      ? Math.min(looks.length - 1, Math.max(0, first + Math.sign(dx) + Math.sign(dy) * GRID_COLS))
+      : gridIndex((r.x0 + r.x1) / 2 + dx, (r.y0 + r.y1) / 2 + dy, gridTop, looks.length);
+    const rest = looks.filter((l) => !moving.includes(l.id));
+    const next = [...rest.slice(0, to), ...looks.filter((l) => moving.includes(l.id)), ...rest.slice(to)];
+    const changed = next.flatMap((l, i) => (l.order === i ? [] : [{ ...l, order: i }]));
+    if (!changed.length) return;
+    changeBoard({ looks: changed }, moving.length === 1 ? 'Moved the look' : `Moved ${moving.length} looks`, { key });
   };
-  const sizeAreas = (ids: string[], k: number, key?: string) => {
-    const ls = areaIds(ids).flatMap((id) => {
-      const l = looks.find((x) => x.id === id);
-      if (!l?.at) return [];
-      const r = areaRect(l), s0 = areaScale(l), s = Math.min(1.6, Math.max(0.16, s0 * k)), kk = s / s0;
-      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
-      return [{ ...l, s, at: { x: cx - (cx - r.x0) * kk, y: cy - (cy - r.y0) * kk } }];
-    });
-    if (ls.length) changeBoard({ looks: ls }, 'Resized', { key });
-  };
+  /** Every look's area is the same size. */
+  const sizeAreas = (_ids: string[], _k: number, _key?: string) => {};
   const removeAreas = (ids: string[]) => {
     const gone = areaIds(ids);
     if (!gone.length) return;
@@ -276,18 +261,18 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   const copyArea = (id: string) => {
     const l = looks.find((x) => x.id === id);
     if (!l) return;
-    const taken = looks.filter((x) => x.at).map(areaRect);
-    const at = freeSpot(taken, outfitZone, areaScale(l));
-    const copy: Look = { ...newLook(looks.length), pieces: l.pieces.map((p) => ({ ...p, id: uid() })), paper: l.paper, name: `${l.name || 'Look'} copy`, at, s: areaScale(l) };
+    const copy: Look = { ...newLook(looks.length), pieces: l.pieces.map((p) => ({ ...p, id: uid() })), paper: l.paper, name: `${l.name || 'Look'} copy`, order: firstOrder() };
     changeBoard({ looks: [copy] }, 'Copied the look');
     setSel(new Set([AREA + copy.id]));
     flash(copy);
   };
-  /** A new area just put down shows itself, and is brought into view when it is off screen. */
+  /** The grid's order for a look put first. */
+  const firstOrder = () => Math.min(0, ...stored.map((l) => l.order ?? 0)) - 1;
+  /** A new look, first in the grid, shows itself, and is brought into view when it is off screen. */
   const flash = (l: Look) => {
     setFresh(l.id);
     setTimeout(() => setFresh((f) => (f === l.id ? null : f)), 1400);
-    const c = api.current, r = areaRect(l);
+    const c = api.current, r = areaRect({ at: gridCell(0, gridTop), s: GRID_S });
     if (!c) return;
     const a = c.toScreen(r.x0, r.y0), b = c.toScreen(r.x1, r.y1), { w, h } = c.size();
     if (a.x < 0 || a.y < 60 || b.x > w || b.y > h - 80) {
@@ -446,8 +431,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   const save = () => {
     const ps = asLook(fit.pieces, items);
     if (!ps.length) return;
-    const taken = looks.filter((l) => l.at).map(areaRect);
-    const l: Look = { ...newLook(looks.length, ps), at: freeSpot(taken, outfitZone, AREA_S), s: AREA_S };
+    const l: Look = { ...newLook(looks.length, ps), order: firstOrder() };
     changeBoard({ looks: [l] }, 'Look saved');
     flash(l);
   };
@@ -656,7 +640,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
         insets={{ top: top + 58, bottom: strip ? 250 : 100, left: 24, right: 24 }}
         maxFitZ={look ? 3 : 2}
         minFitZ={0.06}
-        fitRect={look ? pad(liveRect, 0.04) : room}
+        fitRect={look ? pad(liveRect, 0.04) : outfitView}
         onOpen={onOpen}
         onMove={onMove}
         onDrag={onDrag}
@@ -667,6 +651,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
         onKey={onKey}
         onView={viewed}
         onEmpty={onEmpty}
+        fixedAreas
         toolbar={toolbar}
         hud={hud}
         decorate={decorate}
