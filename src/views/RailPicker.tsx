@@ -9,7 +9,7 @@ import { Garment, Icon } from '../ui';
  * it on in that piece's place, so one is ever chosen. Dragged up out of the strip, a piece lands
  * where it is let go.
  */
-export function RailPicker({ kinds, kind, onKind, mode = 'add', pool, on, onPick, onDrop, onAdd, ghostWidth, onClose }: {
+export function RailPicker({ kinds, kind, onKind, mode = 'add', pool, on, onPick, onDrop, onHover, onAdd, ghostWidth, onClose }: {
   kinds: { id: string; title: string }[];
   /** the kind shown, or 'all' */
   kind: string;
@@ -22,10 +22,12 @@ export function RailPicker({ kinds, kind, onKind, mode = 'add', pool, on, onPick
   onPick: (item: Item) => void;
   /** a piece carried out of the strip was let go here (client coordinates) */
   onDrop: (item: Item, x: number, y: number) => void;
+  /** a piece carried out of the strip is over this point (null: put down) */
+  onHover?: (x: number | null, y?: number) => void;
   /** add pieces to the closet, offered when a kind has none */
   onAdd?: () => void;
-  /** how wide a piece would be on the board, on screen */
-  ghostWidth: (item: Item) => number;
+  /** how wide a piece would be on the board, on screen (let go at this point) */
+  ghostWidth: (item: Item, x?: number, y?: number) => number;
   onClose: () => void;
 }) {
   const strip = useRef<HTMLDivElement>(null);
@@ -52,12 +54,14 @@ export function RailPicker({ kinds, kind, onKind, mode = 'add', pool, on, onPick
       try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* gone */ }
     }
     setGhost({ item, x: e.clientX, y: e.clientY });
+    onHover?.(e.clientX, e.clientY);
   };
   const pullUp = (e: React.PointerEvent, item: Item) => {
     const p = pull.current;
     pull.current = null;
     if (!p?.out) return;
     setGhost(null);
+    onHover?.(null);
     pulled.current = true;
     setTimeout(() => { pulled.current = false; }, 60);
     const r = strip.current?.closest('.pick')?.getBoundingClientRect();
@@ -93,7 +97,7 @@ export function RailPicker({ kinds, kind, onKind, mode = 'add', pool, on, onPick
           : <span className="pick__none small muted">Nothing here yet.</span>)}
       </div>
       {ghost && (() => {
-        const w = ghostWidth(ghost.item), h = w / (ghost.item.aspect || 1);
+        const w = ghostWidth(ghost.item, ghost.x, ghost.y), h = w / (ghost.item.aspect || 1);
         return createPortal(
           <div className="ghost" style={{ width: w, height: h, transform: `translate3d(${ghost.x - w / 2}px, ${ghost.y - h / 2}px, 0)` }}>
             <Garment item={ghost.item} size="full" />

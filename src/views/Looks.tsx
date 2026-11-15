@@ -13,10 +13,10 @@ import {
 import { bounds, type Box, type View } from '../lib/canvas';
 import { shareLook } from '../lib/exportBoard';
 import { trueSize } from '../lib/size';
-import { asLook, KEY_ORDER, nextOf, RAIL, RAILS, railOf, shoeSlot, swap, type RailId } from '../lib/outfit';
+import { addTo, asLook, KEY_ORDER, layout, nextOf, RAIL, RAILS, railOf, shoeSlot, swap, type RailId } from '../lib/outfit';
 import { hint, isDone, isKey, useBindings } from '../lib/shortcuts';
 import { getState, saveLook, useStore } from '../lib/store';
-import { BOARD_RATIO, PAPERS, uid, type Item, type Look, type Placed } from '../lib/types';
+import { BOARD_RATIO, PAPERS, uid, type Item, type Look, type Placed, type WorkingLook } from '../lib/types';
 import { Garment, Icon, Mark, Sheet, toast } from '../ui';
 import { Canvas, ToolBtn, type CanvasApi, type CanvasArea, type CanvasPiece, type SelBox, type Transform } from './Canvas';
 import { poolsOf, useOutfit } from './Mix';
@@ -296,11 +296,20 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     }
   };
 
-  /** The area under a point, other than the one being worked on. */
-  const areaAt = (x: number, y: number): string | null => {
-    if (look && inside(room, x, y)) return 'fit';
+  /**
+   * Where pieces let go at a point would go: another look's area, or the outfit ('fit') from
+   * anywhere outside the look being worked on; null to stay where they are.
+   */
+  const targetAt = (x: number, y: number): string | null => {
     const l = looks.find((q) => q.id !== look?.id && q.at && inside(areaRect(q), x, y));
-    return l?.id ?? null;
+    if (l) return l.id;
+    return look && !inside(areaRect(look), x, y) ? 'fit' : null;
+  };
+  /** How wide a piece would lie in a place, in world units: at the outfit's true scale or a look's own. */
+  const widthIn = (it: Item, to: string, onto?: Placed[]): number => {
+    if (to === 'fit') return (trueSize(it).w / LOOK_CM) * BW;
+    const l = looks.find((q) => q.id === to);
+    return l ? widthOn(it, onto ?? l.pieces, items) * BW * areaScale(l) : 0;
   };
   const centreOf = (ids: string[], dx: number, dy: number) => {
     const b = pieces.find((p) => p.id === ids[0])?.box;
@@ -308,8 +317,8 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   };
 
   /**
-   * Pieces carried onto another area go there: copied when the outfit is either end (it stays
-   * as it is, and a saved look gives pieces to try), moved from one saved look to another.
+   * Pieces carried onto another place move there, where they were let go, at its scale: from
+   * the outfit into a look, out of a look onto the outfit, from one look to another. One step.
    */
   const carry = (ids: string[], dx: number, dy: number, to: string) => {
     const dest = to === 'fit' ? null : looks.find((l) => l.id === to);
@@ -322,22 +331,31 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
       const it = byId.get(p.itemId), b = pieces.find((q) => q.id === p.id)?.box;
       if (!it || !b) continue;
       const at = toFrac(sp, b.cx + dx, b.cy + dy);
-      const w = dest ? widthOn(it, destPieces, items) : trueSize(it).w / LOOK_CM;
-      const q: Placed = { id: uid(), itemId: it.id, x: at.x, y: at.y, w, rot: p.rot, flip: p.flip, ...(dest ? {} : { rail: railOf(it), byHand: true }) };
-      destPieces = [...destPieces, q];
-      fresh.push(q.id);
+      if (dest) {
+        const q: Placed = { id: uid(), itemId: it.id, x: at.x, y: at.y, w: widthIn(it, to, destPieces) / (BW * sp.s), rot: p.rot, flip: p.flip };
+        destPieces = [...destPieces, q];
+        fresh.push(q.id);
+      } else {
+        const r = addTo(destPieces, it, fit.find, at);
+        destPieces = r.pieces.map((q) => (q.id === r.id ? { ...q, rot: p.rot, flip: p.flip } : q));
+        fresh.push(r.id);
+      }
     }
     if (!fresh.length) return;
     const n = fresh.length === 1 ? '' : ` ${fresh.length}`;
     const where = dest ? dest.name || 'the look' : 'the outfit';
-    if (dest && look) {
-      // From one saved look to another: it leaves the first.
-      changeBoard({ looks: [{ ...look, pieces: look.pieces.filter((p) => !ids.includes(p.id)) }, { ...dest, pieces: destPieces }] }, `Moved${n} to ${where}`);
-    } else if (dest) {
-      changeBoard({ looks: [{ ...dest, pieces: destPieces }] }, `Copied${n} to ${where}`);
-    } else {
-      changeBoard({ working: { ...fit.work, pieces: destPieces } }, `Copied${n} to the outfit`);
+    const changed: Look[] = [];
+    let working: WorkingLook | undefined;
+    // They leave where they were...
+    if (look) changed.push({ ...look, pieces: look.pieces.filter((p) => !ids.includes(p.id)) });
+    else {
+      const left = layout(fit.work.pieces.filter((p) => !ids.includes(p.id)), fit.find);
+      working = { ...fit.work, pieces: left, kept: fit.work.kept.filter((k) => !ids.includes(k)) };
     }
+    // ...and lie where they were let go.
+    if (dest) changed.push({ ...dest, pieces: destPieces });
+    else working = { ...fit.work, pieces: destPieces };
+    changeBoard({ looks: changed, working }, `Moved${n} to ${where}`);
     setSel(new Set());
   };
 
@@ -394,19 +412,34 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     if (!c || !el) return;
     const r = el.getBoundingClientRect();
     const w = c.toWorld(x - r.left, y - r.top);
-    const to = areaAt(w.x, w.y);
+    const to = targetAt(w.x, w.y);
+    setTarget(null);
     const dest = to && to !== 'fit' ? looks.find((l) => l.id === to) : null;
     if (dest) {
       changeBoard({ looks: [{ ...dest, pieces: addPiece(dest.pieces, items, item, toFrac(spaceOf(dest), w.x, w.y)) }] }, `Added to ${dest.name || 'the look'}`);
       return;
     }
-    if (to === 'fit') go(null, false);
+    // Let go outside the look being worked on: onto the outfit, staying in the look.
+    if (to === 'fit') { fit.add(item, toFrac(OUTFIT, w.x, w.y)); return; }
     putOn(item, w);
   };
-  const ghostWidth = (item: Item) => {
+  /** A piece carried out of the strip: the place it would land in shows itself. */
+  const worldAt = (x: number, y: number) => {
+    const c = api.current, el = c?.el();
+    if (!c || !el) return null;
+    const r = el.getBoundingClientRect();
+    return c.toWorld(x - r.left, y - r.top);
+  };
+  const hovering = (x: number | null, y = 0) => {
+    const w = x === null ? null : worldAt(x, y);
+    const t = w ? targetAt(w.x, w.y) : null;
+    if (t !== target) setTarget(t);
+  };
+  /** How wide a piece carried out of the strip is on screen: the size it would land at there. */
+  const ghostWidth = (item: Item, x?: number, y?: number) => {
     const z = api.current?.view().z ?? 1;
-    const w = look ? widthOn(item, look.pieces, items) * BW * space.s : (trueSize(item).w / LOOK_CM) * BW;
-    return w * z;
+    const w = x === undefined ? null : worldAt(x, y!);
+    return widthIn(item, (w && targetAt(w.x, w.y)) || look?.id || 'fit') * z;
   };
 
   /* ----- saving the outfit as a look ----- */
@@ -483,14 +516,17 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
     const key = keyed ? 'nudge:' + ids.join() : undefined;
     if (ids.some(isArea)) return moveAreas(ids, dx, dy, key);
     const c = !keyed && centreOf(ids, dx, dy);
-    const to = c ? areaAt(c.x, c.y) : null;
+    const to = c ? targetAt(c.x, c.y) : null;
     if (to) return carry(ids, dx, dy, to);
     edit('move', ids, { dx, dy }, key);
   };
+  /** Carried over another place, a piece takes the size it would land at there. */
   const onDrag = (ids: string[], dx: number, dy: number) => {
     const c = ids.length && !ids.some(isArea) ? centreOf(ids, dx, dy) : null;
-    const t = c ? areaAt(c.x, c.y) : null;
+    const t = c ? targetAt(c.x, c.y) : null;
     if (t !== target) setTarget(t);
+    const p = t && pieces.find((q) => q.id === ids[0]);
+    return p ? widthIn(p.item, t) / p.box.w : 1;
   };
   const onResize = (ids: string[], k: number, keyed: boolean) => {
     const key = keyed ? 'size:' + ids.join() : undefined;
@@ -674,6 +710,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
           on={swapped ? new Set([swapped.itemId]) : onBoard}
           onPick={(it) => (swapped ? replace(swapped.id, it) : pick(it))}
           onDrop={dropped}
+          onHover={hovering}
           onAdd={onAdd}
           ghostWidth={ghostWidth}
           onClose={() => openStrip(null)}

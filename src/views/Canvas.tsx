@@ -104,8 +104,11 @@ export function Canvas(props: {
   onOpen: (id: string, rect: DOMRect) => void;
   /** pieces were moved by (dx, dy) world units; `keyed` for arrow-key nudges */
   onMove: (ids: string[], dx: number, dy: number, keyed: boolean) => void;
-  /** a piece is being carried: where it would be now (null when put down) */
-  onDrag?: (ids: string[], dx: number, dy: number) => void;
+  /**
+   * a piece is being carried: where it would be now (no ids when put down). May answer how much
+   * bigger it would lie where it is now (over a place drawn at another scale).
+   */
+  onDrag?: (ids: string[], dx: number, dy: number) => number | void;
   onResize: (ids: string[], k: number, keyed: boolean) => void;
   /** pieces can be turned: by the round handle, two fingers, or the turn keys */
   onRotate?: (ids: string[], deg: number, keyed: boolean) => void;
@@ -510,8 +513,8 @@ export function Canvas(props: {
       const z = view.current.z;
       const s = snap(c.ids, (at.x - c.sx) / z, (at.y - c.sy) / z, c.others);
       c.dx = s.dx; c.dy = s.dy;
-      draw(c.ids, (b) => ({ b: { ...b, cx: b.cx + c.dx, cy: b.cy + c.dy }, s: 1.03 }));
-      P.onDrag?.(c.ids, c.dx, c.dy);
+      const k = P.onDrag?.(c.ids, c.dx, c.dy) || 1;
+      draw(c.ids, (b) => ({ b: { ...b, cx: b.cx + c.dx, cy: b.cy + c.dy }, s: 1.03 * k }));
       return;
     }
     if (c.kind === 'resize') {

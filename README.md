@@ -16,7 +16,8 @@ size, to mix into outfits.
   what you like, shuffle the rest and save it: every saved look lies around the outfit as its
   own area, to move, resize and arrange. Double-click an area (or zoom in on it) to go in and
   change it with the same tools, its paper and its name; Esc, Done or a click outside steps back
-  out. Drag a piece onto another area to copy it there (from one saved look to another, it moves).
+  out. Drag a piece onto another look, or out of a look onto the board, and it moves there, at
+  that place's scale.
 - **Everywhere**: a click selects, a double-click opens the piece, a drag moves it at once.
 - **Private**: everything lives in the browser first and works offline. An optional account
   (*Settings → Account*) keeps the same closet on the phone and the laptop; *Settings → Backup*
