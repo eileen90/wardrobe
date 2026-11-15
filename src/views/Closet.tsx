@@ -19,7 +19,7 @@ interface Filters { status: 'all' | 'owned' | 'wish'; cats: Category[] }
 
 const clampS = (s: number) => Math.min(4, Math.max(0.3, s));
 /** Bumped when the floor is laid out differently; older places are laid out again once. */
-const FLOOR_LAYOUT = 2;
+const FLOOR_LAYOUT = 3;
 
 /* ---------- lined up: one rail per kind ---------- */
 
@@ -315,8 +315,9 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
   const api = useRef<CanvasApi | null>(null);
   useBindings();
 
-  // Places from the looser floor of earlier versions are laid out once more, closer together.
-  // Which pieces were put down by hand was never kept, so all of them are; one undo puts them back.
+  // Places from the floors of earlier versions (loose lanes, then overlapping piles) are laid out
+  // once more as bubbles. Which pieces were put down by hand was never kept, so all of them are;
+  // one undo puts them back.
   const ready = useStore((s) => s.ready);
   useEffect(() => {
     if (!ready) return;
@@ -324,7 +325,7 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
       if ((v ?? 1) >= FLOOR_LAYOUT) return;
       void db.setKV('floor:layout', FLOOR_LAYOUT);
       const placed = getState().items.filter((i) => i.pos);
-      if (placed.length) arrange(placed.map((i) => [i.id, { pos: { ...i.pos!, c: '' } }]), 'Closet laid out closer');
+      if (placed.length) arrange(placed.map((i) => [i.id, { pos: { ...i.pos!, c: '' } }]), 'Closet tidied up');
     });
   }, [ready]);
 
@@ -383,7 +384,8 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
       const cat = t?.cat && t.cluster !== clusterOf(it) ? t.cat : null;
       const kind = cat ?? it.category;
       const patch: Partial<Item> = {
-        pos: { ...(it.pos ?? { c: clusterOf(it) }), x: x / PX, y: y / PX, c: cat ? t!.cluster : (it.pos?.c ?? clusterOf(it)) },
+        // Put down by hand: no longer the floor's to move.
+        pos: { ...(it.pos ?? { c: clusterOf(it) }), x: x / PX, y: y / PX, c: cat ? t!.cluster : (it.pos?.c ?? clusterOf(it)), at: undefined },
         order: orderOnFloor(floor, items, id, kind, x, y),
       };
       if (cat) { Object.assign(patch, { category: cat, kindSure: true, kindByHand: true }); to = cat; }
@@ -394,7 +396,7 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
   const resized = (ids: string[], k: number, keyed: boolean) => {
     arrange(ids.flatMap((id) => {
       const it = items.find((i) => i.id === id);
-      return it?.pos ? [[id, { pos: { ...it.pos, s: clampS((it.pos.s ?? 1) * k) } }] as [string, Partial<Item>]] : [];
+      return it?.pos ? [[id, { pos: { ...it.pos, s: clampS((it.pos.s ?? 1) * k), at: undefined } }] as [string, Partial<Item>]] : [];
     }), 'Resized', keyed ? { key: 'size:' + ids.join() } : {});
   };
   const acted = (a: PieceAction, ids: string[]) => {
@@ -474,14 +476,14 @@ export function Closet({ onOpen, onAdd, hidden, active }: {
             decorate={(p) => <Tags item={p.item} />}
             under={<>
               {target && (
-                <div className="drop" style={{
-                  transform: `translate(${target.rect.x0 - 28}px, ${target.rect.y0 - 24}px)`,
-                  width: target.rect.x1 - target.rect.x0 + 56, height: target.rect.y1 - target.rect.y0 + 52,
+                <div className="drop is-bubble" style={{
+                  transform: `translate(${target.rect.x0 - 40}px, ${target.rect.y0 - 84}px)`,
+                  width: target.rect.x1 - target.rect.x0 + 80, height: target.rect.y1 - target.rect.y0 + 124,
                 }} />
               )}
               {floor.clusters.map((c) => (
                 <div key={c.id} className={'clabel' + (target?.id === c.id ? ' is-target' : '')}
-                  style={{ transform: `translate(${c.rect.x0}px, ${c.rect.y0 - 40}px) translate(0, -100%)` }}>
+                  style={{ transform: `translate(${(c.rect.x0 + c.rect.x1) / 2}px, ${c.rect.y0}px) translate(-50%, calc(-100% - 12px * var(--zi, 1)))` }}>
                   {c.name} · {c.n}
                 </div>
               ))}

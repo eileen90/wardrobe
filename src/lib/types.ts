@@ -59,8 +59,10 @@ export interface Item {
   /**
    * Its place on the closet floor: centre in centimetres, the cluster it was put in (a piece whose
    * kind changes is given a new place), and any resizing (s), flipping (f) or layering (z) by hand.
+   * A place the floor chose keeps the size it was chosen for (at), so a piece that grows once its
+   * picture is ready can be moved off its neighbours; a place set by hand has none.
    */
-  pos?: { x: number; y: number; c: string; s?: number; f?: boolean; z?: number };
+  pos?: { x: number; y: number; c: string; s?: number; f?: boolean; z?: number; at?: { w: number; h: number } };
   /** position inside its rail when the closet is lined up */
   order?: number;
   /** fingerprint of the picture file, so the same file isn't added twice */

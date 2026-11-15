@@ -2249,3 +2249,14 @@ kbd.pill.is-key {
 .line:has(textarea) > span:first-child {
   padding-top: 7px;
 }
+
+/* ==================================================================
+   Closet bubbles and brand accents (new rules go here, at the end)
+================================================================== */
+/* A bubble about to take a piece: as round as the bubble. */
+.drop.is-bubble {
+  border-radius: 38%;
+}
+.clabel {
+  text-align: center;
+}
