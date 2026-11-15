@@ -12,7 +12,7 @@ import {
 } from '../lib/boards';
 import { bounds, type Box, type View } from '../lib/canvas';
 import { shareLook } from '../lib/exportBoard';
-import { realSize } from '../lib/kind';
+import { trueSize } from '../lib/size';
 import { asLook, KEY_ORDER, nextOf, RAIL, RAILS, railOf, swap, type RailId } from '../lib/outfit';
 import { hint, isDone, isKey, useBindings } from '../lib/shortcuts';
 import { getState, saveLook, useStore } from '../lib/store';
@@ -319,7 +319,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
       const it = byId.get(p.itemId), b = pieces.find((q) => q.id === p.id)?.box;
       if (!it || !b) continue;
       const at = toFrac(sp, b.cx + dx, b.cy + dy);
-      const w = dest ? widthOn(it, destPieces, items) : realSize(it).w / LOOK_CM;
+      const w = dest ? widthOn(it, destPieces, items) : trueSize(it).w / LOOK_CM;
       const q: Placed = { id: uid(), itemId: it.id, x: at.x, y: at.y, w, rot: p.rot, flip: p.flip, ...(dest ? {} : { rail: railOf(it), byHand: true }) };
       destPieces = [...destPieces, q];
       fresh.push(q.id);
@@ -380,7 +380,7 @@ export function Looks({ hidden, active, startWith, enter, onFocus, onAdd }: {
   };
   const ghostWidth = (item: Item) => {
     const z = api.current?.view().z ?? 1;
-    const w = look ? widthOn(item, look.pieces, items) * BW * space.s : (realSize(item).w / LOOK_CM) * BW;
+    const w = look ? widthOn(item, look.pieces, items) * BW * space.s : (trueSize(item).w / LOOK_CM) * BW;
     return w * z;
   };
 

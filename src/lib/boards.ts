@@ -1,4 +1,4 @@
-import { realSize } from './kind';
+import { trueSize } from './size';
 import { BOARD_RATIO, uid, type Category, type Item, type Look, type Placed } from './types';
 
 /* ---------- boards as canvases ---------- */
@@ -30,7 +30,7 @@ export const LAYER = ['outer', 'bottom', 'top', 'socks', 'shoes', 'bag', 'extra'
  */
 export function flatLay(picks: { rail: string; item: Item }[]): { rail: string; x: number; y: number; w: number }[] {
   const by = (r: string) => picks.find((p) => p.rail === r)?.item;
-  const size = (i?: Item) => (i ? realSize(i) : null);
+  const size = (i?: Item) => (i ? trueSize(i) : null);
   const top = by('top'), bottom = by('bottom'), outer = by('outer');
   const isDress = top?.category === 'dress';
   const T = size(top), B = isDress ? null : size(bottom), O = size(outer);
@@ -100,7 +100,7 @@ const boxOf = (p: Placed, item: Item): Box => ({ x: p.x, y: p.y, w: p.w, h: (p.w
 function boardScale(pieces: Placed[], items: Item[]): number {
   const find = finder(items);
   const ks = pieces
-    .map((p) => { const it = find(p.itemId); return it && p.w > 0 ? realSize(it).w / p.w : 0; })
+    .map((p) => { const it = find(p.itemId); return it && p.w > 0 ? trueSize(it).w / p.w : 0; })
     .filter((k) => k > 0 && Number.isFinite(k))
     .sort((a, b) => a - b);
   return ks.length ? ks[Math.floor(ks.length / 2)] : EMPTY_CM * BOARD_RATIO;
@@ -108,7 +108,7 @@ function boardScale(pieces: Placed[], items: Item[]): number {
 
 /** How wide a piece would be on this board, as a fraction of its width. */
 export function widthOn(item: Item, pieces: Placed[], items: Item[]): number {
-  return realSize(item).w / boardScale(pieces, items);
+  return trueSize(item).w / boardScale(pieces, items);
 }
 
 /* ---------- where a new piece goes ---------- */
@@ -201,7 +201,7 @@ function scaleAll(pieces: Placed[], k: number, cx = 0.5, cy = 0.5, tx = 0.5, ty 
  */
 export function addPiece(pieces: Placed[], items: Item[], item: Item, at?: { x: number; y: number }): Placed[] {
   const find = finder(items);
-  const s = realSize(item);
+  const s = trueSize(item);
   const cmW = boardScale(pieces, items);
   let w = s.w / cmW, h = (s.h / cmW) * BOARD_RATIO;
   let out = pieces;
