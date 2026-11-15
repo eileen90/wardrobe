@@ -2327,3 +2327,53 @@ kbd.pill.is-key {
     cursor: crosshair;
   }
 }
+/* Shortcuts in columns: about three on a laptop, one on a phone, key caps to the right. */
+.keys.is-columns {
+  display: block;
+  columns: 3 250px;
+  column-gap: 36px;
+}
+.keys.is-columns .keys__group {
+  break-inside: avoid;
+  padding-bottom: 16px;
+}
+.keys.is-columns .keys__group .label {
+  display: block;
+  margin-bottom: 4px;
+}
+.keys.is-columns .keys__row {
+  min-height: 32px;
+  padding: 2px 0;
+}
+.keys.is-columns.is-edit .keys__row {
+  min-height: 38px;
+}
+.keys.is-columns .keys__label {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 18px;
+}
+.keys.is-columns .keys__row > .pill.is-key,
+.keys.is-columns .keys__bind {
+  flex: none;
+  margin-left: auto;
+}
+.keys.is-columns .pill.is-key {
+  min-width: 36px;
+  min-height: 24px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+@media (min-width: 760px) {
+  /* The F12 sheet and the Settings section both widen to hold the columns. */
+  .sheet:has(.keys.is-columns) {
+    width: min(1120px, calc(100vw - 48px));
+    margin-left: calc(min(1120px, calc(100vw - 48px)) / -2);
+    max-height: calc(100svh - 48px);
+  }
+  #shortcuts .keys.is-columns {
+    width: min(1120px, calc(100vw - 40px));
+    margin-left: 50%;
+    transform: translateX(-50%);
+  }
+}
