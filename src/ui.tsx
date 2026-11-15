@@ -46,12 +46,24 @@ export function Icon({ name }: { name: keyof typeof PATHS }) {
   );
 }
 
-/** The mark: a shirt collar that reads as a W. */
-export function Mark({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="96 120 320 260" fill="currentColor" aria-hidden="true">
+/**
+ * The mark: a shirt collar that reads as a W, dusty rose on a bordeaux tile as in the app's icon;
+ * `bare`, the collar alone in the text colour.
+ */
+export function Mark({ className, bare }: { className?: string; bare?: boolean }) {
+  const collar = (
+    <>
       <path d="M96 120h130l30 150-90 110z" />
       <path d="M416 120H286l-30 150 90 110z" />
+    </>
+  );
+  if (bare) {
+    return <svg className={className} viewBox="96 120 320 260" fill="currentColor" aria-hidden="true">{collar}</svg>;
+  }
+  return (
+    <svg className={className} viewBox="0 0 512 512" aria-hidden="true">
+      <rect width="512" height="512" rx="116" style={{ fill: 'var(--wine, #402321)' }} />
+      <g style={{ fill: 'var(--rose, #c17c70)' }}>{collar}</g>
     </svg>
   );
 }

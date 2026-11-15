@@ -290,7 +290,7 @@ const carryTouch = { current: false };
 
 function Tags({ item }: { item: Item }) {
   if (item.state === 'raw') return <span className="tag">photo</span>;
-  if (item.state === 'working') return <span className="tag is-blue">in the studio</span>;
+  if (item.state === 'working') return <span className="tag is-busy">in the studio</span>;
   if (item.state === 'queued') return <span className="tag">waiting</span>;
   if (item.status === 'wish') return <span className="tag">wishlist</span>;
   return null;
